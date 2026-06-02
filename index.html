@@ -226,6 +226,13 @@
                              Print
                          </button>
                      </div>
+                    <div id="printer-select-area" class="hidden mb-6">
+                        <label for="printer-select" class="block text-sm font-semibold text-blue-100 mb-2">Printer</label>
+                        <select id="printer-select" class="w-full px-4 py-3 rounded-lg border border-blue-300 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500">
+                            <option value="">Auto-detect Zebra USB printer</option>
+                        </select>
+                        <p id="printer-status" class="text-xs text-blue-200 mt-2"></p>
+                    </div>
                 </div>
 
                 <div id="error-message" class="text-center text-yellow-300 font-medium mb-6 h-6"></div>
@@ -328,6 +335,7 @@
         // Backend API Configuration - the backend sends RAW ZPL directly to the printer.
         // Auto-detect backend URL from the page origin so clients can reach this server.
         const BACKEND_URL = window.location.origin;
+        const DEFAULT_PRINTER_LABEL = new URLSearchParams(window.location.search).get('printer') || '';
 
         // DOM Elements
         const attendeeCodeInput = document.getElementById('attendee-code');
@@ -349,9 +357,13 @@
         const scannedAttendeeName = document.getElementById('scanned-attendee-name');
         const printNowBtn = document.getElementById('print-now-btn');
         const scanModeHeader = document.getElementById('scan-mode-header');
+        const printerSelectArea = document.getElementById('printer-select-area');
+        const printerSelect = document.getElementById('printer-select');
+        const printerStatus = document.getElementById('printer-status');
 
         let currentAttendee = null;
         let html5QrCode = null;
+        let selectedPrinterLabel = DEFAULT_PRINTER_LABEL;
 
         const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
             '&': '&amp;',
@@ -408,6 +420,30 @@
                 return [value.slice(0, spaceAfter15).trim(), value.slice(spaceAfter15 + 1).trim()];
             }
             return [value.slice(0, 20).trim(), value.slice(20).trim()];
+        };
+
+        const sanitizeAscii = (value) => String(value ?? '').replace(/[^\x00-\x7F]/g, "");
+
+        const loadPrinters = async () => {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/printers`, { method: 'GET' });
+                if (!response.ok) return;
+                const data = await response.json();
+                if (!data.success || !Array.isArray(data.printers) || data.printers.length === 0) return;
+
+                data.printers.forEach((printer) => {
+                    const option = document.createElement('option');
+                    option.value = printer.label;
+                    option.textContent = printer.label;
+                    if (printer.label === DEFAULT_PRINTER_LABEL) option.selected = true;
+                    printerSelect.appendChild(option);
+                });
+                selectedPrinterLabel = printerSelect.value;
+                printerSelectArea.classList.remove('hidden');
+                printerStatus.textContent = selectedPrinterLabel ? `Using ${selectedPrinterLabel}` : 'Using auto-detected Zebra USB printer.';
+            } catch (error) {
+                console.warn('Unable to load printer list.', error);
+            }
         };
 
         // Function to fetch attendee data from external API
@@ -524,8 +560,102 @@
             }
         };
 
+        const createQrCanvas = async (text, size = 400) => {
+            const holder = document.createElement('div');
+            holder.style.position = 'fixed';
+            holder.style.left = '-9999px';
+            holder.style.top = '-9999px';
+            document.body.appendChild(holder);
 
-        // Send print request to backend API
+            new QRCode(holder, {
+                text: text || 'NO-CODE',
+                width: size,
+                height: size,
+                colorDark: '#000000',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const canvas = holder.querySelector('canvas');
+            if (canvas) {
+                const copy = document.createElement('canvas');
+                copy.width = size;
+                copy.height = size;
+                copy.getContext('2d').drawImage(canvas, 0, 0, size, size);
+                holder.remove();
+                return copy;
+            }
+
+            const qrImg = holder.querySelector('img');
+            if (qrImg) {
+                await new Promise(resolve => {
+                    if (qrImg.complete) return resolve();
+                    qrImg.onload = resolve;
+                    qrImg.onerror = resolve;
+                });
+                const copy = document.createElement('canvas');
+                copy.width = size;
+                copy.height = size;
+                copy.getContext('2d').drawImage(qrImg, 0, 0, size, size);
+                holder.remove();
+                return copy;
+            }
+
+            holder.remove();
+            throw new Error('Could not generate QR canvas.');
+        };
+
+        const drawFittedText = (ctx, text, x, y, maxWidth, fontSize, weight = '400') => {
+            const safeText = String(text || '');
+            let size = fontSize;
+            do {
+                ctx.font = `${weight} ${size}px Poppins, Arial, sans-serif`;
+                if (ctx.measureText(safeText).width <= maxWidth || size <= 26) break;
+                size -= 4;
+            } while (size > 26);
+            ctx.fillText(safeText, x, y);
+        };
+
+        const createBadgeImageDataUrl = async (attendee) => {
+            if (document.fonts && document.fonts.ready) {
+                try { await document.fonts.ready; } catch (_) {}
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 800;
+            canvas.height = 1200;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#000000';
+            ctx.textBaseline = 'top';
+
+            const clean = {
+                name: sanitizeAscii(attendee.name),
+                company: sanitizeAscii(attendee.company),
+                category: sanitizeAscii(attendee.category || 'Delegate').toUpperCase(),
+                code: sanitizeAscii(attendee.code || 'NO-CODE')
+            };
+            const nameLine1 = deriveNameLine1(clean.name);
+            const [companyLine1, companyLine2] = splitCompanyLines(clean.company);
+
+            drawFittedText(ctx, clean.category, 50, 80, 700, 50, '400');
+            drawFittedText(ctx, nameLine1, 50, 200, 700, 110, '400');
+            drawFittedText(ctx, companyLine1, 50, 380, 700, 50, '400');
+            if (companyLine2) {
+                drawFittedText(ctx, companyLine2, 50, 450, 700, 50, '400');
+            }
+
+            const qrCanvas = await createQrCanvas(clean.code, 400);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(qrCanvas, 200, 640, 400, 400);
+
+            return canvas.toDataURL('image/png');
+        };
+
+
+        // Send print request to backend API as a full-size badge image.
         const sendToPrinter = async (attendee) => {
             try {
                 // Sanitize attendee data to remove problematic characters before sending to backend.
@@ -537,12 +667,18 @@
                     company: String(attendee.company ?? '').replace(/[^\x00-\x7F]/g, ""),
                     code: String(attendee.code ?? '').replace(/[^\x00-\x7F]/g, "")
                 };
+                const badgeImage = await createBadgeImageDataUrl(sanitizedAttendee);
                 const response = await fetch(`${BACKEND_URL}/api/print`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ attendee: sanitizedAttendee })
+                    body: JSON.stringify({
+                        print_mode: 'image',
+                        printer_label: selectedPrinterLabel,
+                        attendee: sanitizedAttendee,
+                        badge_image: badgeImage
+                    })
                 });
 
                 const result = await response.json();
@@ -996,6 +1132,10 @@
         modeInputBtn.addEventListener('click', switchToInputMode);
         modeScanBtn.addEventListener('click', switchToScanMode);
         closeScannerBtn.addEventListener('click', switchToInputMode);
+        printerSelect.addEventListener('change', () => {
+            selectedPrinterLabel = printerSelect.value;
+            printerStatus.textContent = selectedPrinterLabel ? `Using ${selectedPrinterLabel}` : 'Using auto-detected Zebra USB printer.';
+        });
         
         let printNowProcessing = false; // Flag to prevent multiple print attempts from Print Now button
         printNowBtn.addEventListener('click', async () => {
@@ -1075,6 +1215,7 @@
             switchToInputMode();
             
             attendeeCodeInput.placeholder = 'Enter your ID Ticket...';
+            loadPrinters();
             updateTime();
             setInterval(updateTime, 1000);
         });

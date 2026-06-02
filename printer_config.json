@@ -1,4 +1,18 @@
 {
   "PRINTER_QUEUE": "ZDesigner ZD421-203dpi ZPL",
-  "USE_TEST_MODE": false
+  "USE_TEST_MODE": false,
+  "ZEBRA_USB_SERIALS": [],
+  "ZEBRA_USB_SERIAL": "",
+  "ZEBRA_PRINTERS": [],
+  "ZEBRA_MODEL_KEYWORDS": [
+    "ZDesigner",
+    "Zebra",
+    "ZD230",
+    "ZD421",
+    "ZD621",
+    "ZT",
+    "GK",
+    "GX"
+  ],
+  "ALLOW_PRINTER_QUEUE_FALLBACK": false
 }
