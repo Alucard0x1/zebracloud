@@ -278,15 +278,15 @@
                 <p class="text-blue-200 mt-3 text-sm">Scan QR for auto print your badge.</p>
             </div>
             
-            <div id="preview-section" class="w-full flex-grow flex items-center justify-center p-6">
+            <div id="preview-section" class="w-full flex-grow flex items-center justify-center p-4 md:p-6">
                 <div class="flex justify-center">
-                    <div id="badge-container" class="w-[280px] h-[400px]">
+                    <div id="badge-container" class="w-[min(560px,calc(100vw-2rem))] aspect-[7/10] max-h-[calc(100vh-3rem)]">
                         <div id="badge-placeholder" class="w-full h-full bg-slate-200 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-center text-slate-500 p-4">
                              <svg class="w-16 h-16 text-slate-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 012-2h4a2 2 0 012 2v1m-4 0h4m-9 11V10l3 3m-3-3l3-3"></path></svg>
                             <h3 class="font-semibold text-lg">Badge Preview</h3>
                             <p class="text-sm">Your badge will appear here after you enter a valid code.</p>
                         </div>
-                        <div id="badge-preview" class="w-[280px] h-[400px] bg-white rounded-xl shadow-2xl p-4 flex-col border border-slate-200 hidden">
+                        <div id="badge-preview" class="w-full h-full bg-white rounded-xl shadow-2xl flex-col border border-slate-200 hidden">
                             </div>
                     </div>
                 </div>
@@ -442,18 +442,18 @@
             const companyLine2 = escapeHTML(companyLine2Raw);
             return `
                 <div class="relative w-full h-full bg-white overflow-hidden rounded-xl">
-                    <div class="absolute inset-y-0 left-1/2 w-[266.67px] -translate-x-1/2 bg-white text-black font-sans">
-                        <div class="absolute left-[6.25%] top-[6.67%] text-[17px] leading-none font-normal uppercase">
+                    <div class="absolute inset-y-0 left-1/2 w-[95.24%] -translate-x-1/2 bg-white text-black font-sans">
+                        <div class="absolute left-[6.25%] top-[6.67%] text-[clamp(17px,3vw,34px)] leading-none font-normal uppercase">
                             ${safeCategory}
                         </div>
-                        <div class="absolute left-[6.25%] top-[16.67%] max-w-[88%] text-[37px] leading-none font-normal whitespace-nowrap overflow-hidden">
+                        <div class="absolute left-[6.25%] top-[16.67%] max-w-[88%] text-[clamp(37px,6.6vw,74px)] leading-none font-normal whitespace-nowrap overflow-hidden">
                             ${nameLine1}
                         </div>
-                        <div class="absolute left-[6.25%] top-[31.67%] max-w-[88%] text-[17px] leading-none font-normal whitespace-nowrap overflow-hidden">
+                        <div class="absolute left-[6.25%] top-[31.67%] max-w-[88%] text-[clamp(17px,3vw,34px)] leading-none font-normal whitespace-nowrap overflow-hidden">
                             ${companyLine1}
                         </div>
                         ${companyLine2 ? `
-                        <div class="absolute left-[6.25%] top-[37.5%] max-w-[88%] text-[17px] leading-none font-normal whitespace-nowrap overflow-hidden">
+                        <div class="absolute left-[6.25%] top-[37.5%] max-w-[88%] text-[clamp(17px,3vw,34px)] leading-none font-normal whitespace-nowrap overflow-hidden">
                             ${companyLine2}
                         </div>` : ''}
                         <div class="absolute left-[25%] top-[53.33%] w-[50%] aspect-square">
@@ -591,7 +591,7 @@
 
                 // Generate QR code for the on-screen preview
                 setTimeout(() => {
-                    generateQRCode(`qrcode-${safeDomId(currentAttendee.code)}`, currentAttendee, 132);
+                    generateQRCode(`qrcode-${safeDomId(currentAttendee.code)}`, currentAttendee, 264);
                     
                     // Generate QR code for the print version as well
                     generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120); // 80 * 1.5 = 120
@@ -679,7 +679,7 @@
                 badgePrintContainer.innerHTML = createPrintBadgeHTML(currentAttendee);
                 
                 setTimeout(() => {
-                    generateQRCode(`qrcode-${safeDomId(currentAttendee.code)}`, currentAttendee, 132);
+                    generateQRCode(`qrcode-${safeDomId(currentAttendee.code)}`, currentAttendee, 264);
                     generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120); // 80 * 1.5 = 120
                 }, 0);
                 
@@ -737,7 +737,7 @@
                             badgePrintContainer.innerHTML = createPrintBadgeHTML(currentAttendee);
                             
                             setTimeout(() => {
-                                generateQRCode(`qrcode-${safeDomId(currentAttendee.code)}`, currentAttendee, 132);
+                                generateQRCode(`qrcode-${safeDomId(currentAttendee.code)}`, currentAttendee, 264);
                                 generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120); // 80 * 1.5 = 120
                             }, 0);
                             
@@ -778,7 +778,7 @@
                             badgePrintContainer.innerHTML = createPrintBadgeHTML(currentAttendee);
                             
                             setTimeout(() => {
-                                generateQRCode(`qrcode-${safeDomId(currentAttendee.code)}`, currentAttendee, 132);
+                                generateQRCode(`qrcode-${safeDomId(currentAttendee.code)}`, currentAttendee, 264);
                                 generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120); // 80 * 1.5 = 120
                             }, 0);
                             
