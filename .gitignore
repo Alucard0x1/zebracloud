@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.pyc
+test_print_command.prn
+ngrok.exe
+*.zip

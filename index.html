@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Self-Service Badge Printer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'sans': ['Poppins', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <link rel="stylesheet" href="fonts/poppins/poppins.css">
+    <style>
+        /* Custom styles for the application and print layout */
+        body {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        /* Print styles for badge printing */
+        @media print {
+            /* Hide everything except the badge and its children */
+            body *:not(#badge-print):not(#badge-print *) {
+                visibility: hidden !important;
+            }
+
+            /* Position and display the badge for proper printing */
+            #badge-print {
+                display: block !important;
+                visibility: visible !important;
+                position: fixed !important;
+                top: 50% !important;
+                left: 50% !important;
+                transform: translate(-50%, -50%) rotate(180deg) !important;
+                width: 90mm !important;
+                height: 120mm !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                box-shadow: none !important;
+                border: none !important;
+                background: white !important;
+                overflow: hidden !important;
+                page-break-after: avoid !important;
+                page-break-before: avoid !important;
+                page-break-inside: avoid !important;
+            }
+
+            /* Ensure all badge elements are visible with proper colors */
+            #badge-print * {
+                visibility: visible !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            /* Ensure content stays within badge boundaries */
+            .print-badge-content {
+                page-break-inside: avoid !important;
+                position: relative !important;
+                width: 90mm !important;
+                height: 120mm !important;
+            }
+
+            /* Reset body for print */
+            html, body {
+                width: 100% !important;
+                height: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: white !important;
+                overflow: hidden !important;
+            }
+        }
+
+        /* Page setup for badge size */
+        @page {
+            size: 90mm 120mm;
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* Mobile-specific print styles for Android devices */
+        @media print and (max-width: 767px) {
+            body {
+                font-size: 12px !important;
+                line-height: 1.2 !important;
+            }
+
+            #badge-print {
+                width: 85mm !important;
+                height: 115mm !important;
+                transform: translate(-50%, -50%) rotate(180deg) !important;
+            }
+
+            .print-badge-content {
+                width: 85mm !important;
+                height: 115mm !important;
+            }
+
+            .category-header {
+                font-size: 12pt !important;
+                padding: 6px 0 !important;
+            }
+
+            .name-section h2 {
+                font-size: 20pt !important;
+            }
+
+            .job-title-section p {
+                font-size: 12pt !important;
+            }
+
+            .code-section {
+                font-size: 10pt !important;
+            }
+
+            .badge-footer {
+                font-size: 8pt !important;
+            }
+        }
+        
+        /* Custom badge category colors */
+        .category-Delegate { background-color: #3b82f6; color: white; } /* Blue */
+        .category-VIP { background-color: #ca8a04; color: white; } /* Yellow-Gold */
+        .category-Sponsor { background-color: #16a34a; color: white; } /* Green */
+        
+        
+        /* CSS filter to make the blue logo appear white */
+        .logo-white { filter: brightness(0) invert(1); }
+
+        /* QR Reader styling */
+        #qr-reader {
+            width: 100%;
+            height: 100%;
+            border: none;
+            overflow: hidden;
+        }
+        
+        #qr-reader video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover;
+        }
+        
+        /* Full height scanner container - only in left column */
+        .left-column-container {
+            position: relative;
+        }
+        
+        #qr-scanner-area.full-height {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            background: #1e40af;
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+            z-index: 50;
+        }
+        
+        /* Success notification styling */
+        .scan-success-notification {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            z-index: 100;
+            text-align: center;
+            max-width: 400px;
+            animation: fadeInScale 0.3s ease-out;
+        }
+        
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-100">
+
+    <div class="flex flex-col lg:flex-row min-h-screen">
+        <div class="w-full lg:w-1/2 bg-blue-700 p-6 md:p-8 flex flex-col justify-center left-column-container">
+            <div class="max-w-md mx-auto w-full">
+                <div class="text-center mb-8">
+                    <img src="https://w.media/wp-content/uploads/2025/02/wmedialogo-02-scaled.png" alt="Logo" class="logo-white mx-auto mb-6 h-12" onerror="this.style.display='none'">
+                    
+                    <p class="text-2xl text-blue-100 mt-1">Self Checkin & Print Badge</p>
+                    <p class="text-blue-200 mt-4">Enter your ID Ticket or scan QR to preview and print your badge.</p>
+                </div>
+
+                <div class="bg-blue-800 p-1 rounded-lg flex justify-center gap-2 mb-4">
+                    <button id="mode-input-btn" class="w-full py-2 px-4 rounded-md text-white bg-blue-600 font-semibold">Manual Input</button>
+                    <button id="mode-scan-btn" class="w-full py-2 px-4 rounded-md text-blue-200 hover:bg-blue-600 hover:text-white font-semibold">Scan QR</button>
+                </div>
+
+                <div id="input-area">
+                    <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-4">
+                        <input type="text" id="attendee-code" placeholder="Enter your ID Ticket..." class="w-full text-lg px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-50 transition duration-150 ease-in-out">
+                    </div>
+                     <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
+                         <button id="preview-btn" class="w-full sm:w-1/2 bg-white text-blue-700 font-semibold px-6 py-3 rounded-lg hover:bg-blue-100 transition duration-150 ease-in-out shadow-sm">
+                             Preview Badge
+                         </button>
+                         <button id="print-btn" disabled class="w-full sm:w-1/2 bg-slate-400 text-white font-semibold px-6 py-3 rounded-lg transition duration-150 ease-in-out cursor-not-allowed shadow-sm">
+                             Print
+                         </button>
+                     </div>
+                </div>
+
+                <div id="error-message" class="text-center text-yellow-300 font-medium mb-6 h-6"></div>
+
+                <div class="mt-8 pt-8 border-t border-blue-600 text-center text-blue-200">
+                    <div class="mb-4">
+                        <p class="font-semibold text-white text-lg" id="current-time"></p>
+                        <p class="text-sm" id="current-date"></p>
+                    </div>
+                    <div>
+                        <p class="font-semibold text-white">Need Help?</p>
+                        <p>Visit the Help Desk at the main entrance.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="qr-scanner-area" class="hidden full-height">
+                <div class="absolute top-0 left-0 right-0 flex items-center justify-between p-4 z-10">
+                    <h2 class="text-2xl font-bold text-white">Scan QR Code</h2>
+                    <button id="close-scanner-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-semibold">
+                        Switch Manual
+                    </button>
+                </div>
+                <div class="w-full h-full flex flex-col">
+                    <div id="qr-reader" class="w-full h-full"></div>
+                    
+                    
+                    <p id="qr-status" class="absolute bottom-4 left-0 right-0 text-center text-blue-200 text-lg z-10">Point your camera at the QR code.</p>
+                </div>
+                
+                <div id="scan-success-notification" class="scan-success-notification hidden">
+                    <div class="mb-4">
+                        <svg class="w-16 h-16 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-2">QR Code Scanned!</h3>
+                    <p class="text-slate-600 mb-4">Attendee: <span id="scanned-attendee-name" class="font-semibold"></span></p>
+                    <div class="flex gap-3 justify-center">
+                        <button id="print-now-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">Print Now</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="w-full lg:w-1/2 bg-slate-50 flex flex-col">
+            <div id="scan-mode-header" class="hidden bg-blue-700 p-6 text-center">
+                <img src="https://w.media/wp-content/uploads/2025/02/wmedialogo-02-scaled.png" alt="Logo" class="logo-white mx-auto mb-4 h-10" onerror="this.style.display='none'">
+                <p class="text-xl text-blue-100 mt-1">Self Checkin & Print Badge</p>
+                <p class="text-blue-200 mt-3 text-sm">Scan QR for auto print your badge.</p>
+            </div>
+            
+            <div id="preview-section" class="w-full flex-grow flex items-center justify-center p-6">
+                <div class="flex justify-center">
+                    <div id="badge-container" class="w-[280px] h-[400px]">
+                        <div id="badge-placeholder" class="w-full h-full bg-slate-200 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-center text-slate-500 p-4">
+                             <svg class="w-16 h-16 text-slate-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 012-2h4a2 2 0 012 2v1m-4 0h4m-9 11V10l3 3m-3-3l3-3"></path></svg>
+                            <h3 class="font-semibold text-lg">Badge Preview</h3>
+                            <p class="text-sm">Your badge will appear here after you enter a valid code.</p>
+                        </div>
+                        <div id="badge-preview" class="w-[280px] h-[400px] bg-white rounded-xl shadow-2xl p-4 flex-col border border-slate-200 hidden">
+                            </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="badge-print" class="hidden" style="position: absolute; left: -9999px; top: -9999px; background: white;"></div>
+    
+    <div id="debug-badge" style="position: fixed; top: 10px; right: 10px; width: 200px; height: 300px; background: white; border: 2px solid red; z-index: 10000; display: none;"></div>
+    
+    <div id="android-print-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl p-6 max-w-md mx-4 shadow-2xl">
+            <div class="text-center mb-4">
+                <svg class="w-16 h-16 text-blue-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                </svg>
+                <h3 class="text-xl font-bold text-slate-800 mb-2">Android Printing Instructions</h3>
+            </div>
+            <div class="text-left text-slate-600 space-y-3 mb-6">
+                <p class="font-semibold">To print your badge on Android:</p>
+                <ol class="list-decimal list-inside space-y-2 text-sm">
+                    <li>The print dialog should open automatically</li>
+                    <li>If not, tap the <strong>three-dot menu (⋮)</strong> in your browser</li>
+                    <li>Select <strong>"Print"</strong> from the menu</li>
+                    <li>Choose your printer or save as PDF</li>
+                    <li>Adjust settings if needed and tap <strong>"Print"</strong></li>
+                </ol>
+                <p class="text-xs text-slate-500 mt-3">💡 Tip: Make sure your printer is connected to the same Wi-Fi network</p>
+            </div>
+            <div class="flex gap-3">
+                <button id="android-modal-close" class="flex-1 bg-slate-200 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-300 transition">Got it</button>
+                <button id="android-modal-print" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">Try Print Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Backend API Configuration - the backend sends RAW ZPL directly to the printer.
+        // Auto-detect backend URL: use the current page origin so it works
+        // via ngrok, local LAN, or localhost without manual edits.
+        const BACKEND_URL = window.location.origin;
+
+        // DOM Elements
+        const attendeeCodeInput = document.getElementById('attendee-code');
+        const previewBtn = document.getElementById('preview-btn');
+        const printBtn = document.getElementById('print-btn');
+        const badgePreviewContainer = document.getElementById('badge-preview');
+        const badgePlaceholder = document.getElementById('badge-placeholder');
+        const badgePrintContainer = document.getElementById('badge-print');
+        const errorMessage = document.getElementById('error-message');
+        const timeEl = document.getElementById('current-time');
+        const dateEl = document.getElementById('current-date');
+        const modeInputBtn = document.getElementById('mode-input-btn');
+        const modeScanBtn = document.getElementById('mode-scan-btn');
+        const qrScannerArea = document.getElementById('qr-scanner-area');
+        const inputArea = document.getElementById('input-area');
+        const qrStatus = document.getElementById('qr-status');
+        const closeScannerBtn = document.getElementById('close-scanner-btn');
+        const scanSuccessNotification = document.getElementById('scan-success-notification');
+        const scannedAttendeeName = document.getElementById('scanned-attendee-name');
+        const printNowBtn = document.getElementById('print-now-btn');
+        const scanModeHeader = document.getElementById('scan-mode-header');
+
+        let currentAttendee = null;
+        let html5QrCode = null;
+
+        const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[char]));
+
+        const safeDomId = (value) => String(value ?? '').replace(/[^A-Za-z0-9_-]/g, '_') || 'empty';
+
+        const categoryClass = (value) => {
+            const normalized = String(value ?? 'Delegate').replace(/[^A-Za-z0-9_-]/g, '');
+            return normalized || 'Delegate';
+        };
+
+        const deriveNameLine1 = (name) => {
+            const parts = String(name ?? '').split(/\s+/).filter(Boolean);
+            if (parts.length === 0) return String(name ?? '');
+
+            if (parts[0].endsWith('.')) {
+                if (parts.length === 1) return parts[0];
+                let line = `${parts[0]} ${parts[1]}`;
+                if (parts.length > 2) {
+                    const combined = `${parts[0]} ${parts[1]} ${parts[2]}`;
+                    if (`${parts[0]} ${parts[1]}`.length < 6 && combined.length <= 25) {
+                        line = combined;
+                    }
+                }
+                return line;
+            }
+
+            if (parts.length === 1) return parts[0];
+            if (parts.length === 2) return `${parts[0]} ${parts[1]}`;
+
+            if (parts[1].length === 1) return parts[0];
+            let line = `${parts[0]} ${parts[1]}`;
+            const combined = `${parts[0]} ${parts[1]} ${parts[2]}`;
+            if (line.length < 8 && combined.length <= 25) {
+                line = combined;
+            }
+            return line;
+        };
+
+        const splitCompanyLines = (company) => {
+            const value = String(company ?? '');
+            if (value.length <= 20) return [value, ''];
+
+            const match = value.match(/^(.{0,20})\s+(.*)/);
+            if (match) return [match[1].trim(), match[2].trim()];
+
+            const spaceAfter15 = value.indexOf(' ', 15);
+            if (spaceAfter15 !== -1 && spaceAfter15 <= 25) {
+                return [value.slice(0, spaceAfter15).trim(), value.slice(spaceAfter15 + 1).trim()];
+            }
+            return [value.slice(0, 20).trim(), value.slice(20).trim()];
+        };
+
+        // Function to fetch attendee data from external API
+        const fetchAttendeeData = async (paramType, paramValue) => {
+            try {
+                const query = new URLSearchParams({ type: paramType, value: paramValue });
+                const response = await fetch(`${BACKEND_URL}/api/attendee?${query}`, { method: 'GET' });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed with status ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                if (!data.success || !data.attendee) {
+                    throw new Error(data.error || 'Attendee lookup failed');
+                }
+
+                return data.attendee;
+            } catch (error) {
+                console.error('Error fetching attendee data:', error);
+                throw error;
+            }
+        };
+
+        const createBadgeHTML = (attendee) => {
+            const codeId = safeDomId(attendee.code);
+            const safeCategory = escapeHTML(attendee.category);
+            const nameLine1 = escapeHTML(deriveNameLine1(attendee.name));
+            const [companyLine1Raw, companyLine2Raw] = splitCompanyLines(attendee.company);
+            const companyLine1 = escapeHTML(companyLine1Raw);
+            const companyLine2 = escapeHTML(companyLine2Raw);
+            return `
+                <div class="relative w-full h-full bg-white overflow-hidden rounded-xl">
+                    <div class="absolute inset-y-0 left-1/2 w-[266.67px] -translate-x-1/2 bg-white text-black font-sans">
+                        <div class="absolute left-[6.25%] top-[6.67%] text-[17px] leading-none font-normal uppercase">
+                            ${safeCategory}
+                        </div>
+                        <div class="absolute left-[6.25%] top-[16.67%] max-w-[88%] text-[37px] leading-none font-normal whitespace-nowrap overflow-hidden">
+                            ${nameLine1}
+                        </div>
+                        <div class="absolute left-[6.25%] top-[31.67%] max-w-[88%] text-[17px] leading-none font-normal whitespace-nowrap overflow-hidden">
+                            ${companyLine1}
+                        </div>
+                        ${companyLine2 ? `
+                        <div class="absolute left-[6.25%] top-[37.5%] max-w-[88%] text-[17px] leading-none font-normal whitespace-nowrap overflow-hidden">
+                            ${companyLine2}
+                        </div>` : ''}
+                        <div class="absolute left-[25%] top-[53.33%] w-[50%] aspect-square">
+                            <div id="qrcode-${codeId}" class="w-full h-full bg-white"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+        
+        // This function creates the browser print-preview layout.
+        const createPrintBadgeHTML = (attendee) => {
+            // Convert 0.01mm layout coordinates into percentages for HTML.
+            // Label size is 90mm x 120mm, so width=9000 (90mm*100) and height=12000 (120mm*100)
+            // QR code at H0818, V00661 -> H=818/9000*100% ~ 9.1%, V=661/12000*100% ~ 5.5%
+            // Name at H0770, V00829 -> H=770/9000*100% ~ 8.6%, V=829/1200*100% ~ 6.9%
+            // Event title at H0866, V00145 -> H=866/9000*100% ~ 9.6%, V=145/1200*100% ~ 1.2%
+            // Category at H0914, V01058 -> H=914/9000*100% ~ 10.2%, V=1058/1200*100% ~ 8.8%
+            const qrLeft = (818 / 9000) * 100;
+            const qrTop = (661 / 12000) * 100;
+            const nameLeft = (770 / 9000) * 100;
+            const nameTop = (829 / 12000) * 100;
+            const categoryLeft = (914 / 9000) * 100;
+            const categoryTop = (1058 / 12000) * 100;
+            const codeId = safeDomId(attendee.code);
+            const safeCategory = escapeHTML(attendee.category);
+            
+            return `
+                <div class="print-badge-content" style="width: 90mm; height: 120mm; box-sizing: border-box; background: white; display: block; margin: 0; padding: 0; font-family: 'Poppins', sans-serif; overflow: hidden; position: relative; color: #000;">
+                    
+                    <div style="position: absolute; left: ${qrLeft}%; top: ${qrTop}%; width: 45mm; height: 45mm;">
+                        <div id="qrcode-print-${codeId}" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;"></div>
+                    </div>
+
+                    <div style="position: absolute; left: ${nameLeft}%; top: ${nameTop}%; font-size: 36pt; font-weight: bold;">
+                        ${escapeHTML(attendee.name)}
+                    </div>
+
+                    <div style="position: absolute; left: ${nameLeft}%; top: ${(nameTop + 8)}%; font-size: 36pt; font-weight: bold;">
+                        ${escapeHTML(attendee.company)}
+                    </div>
+
+                    <div style="position: absolute; left: ${categoryLeft}%; top: ${categoryTop}%; font-size: 22pt; font-weight: bold;">
+                        ${safeCategory}
+                    </div>
+
+                </div>
+            `;
+        };
+
+        const generateQRCode = (elementId, attendee, size) => {
+            const qrElement = document.getElementById(elementId);
+            if(qrElement) {
+                qrElement.innerHTML = '';
+                // Use just the ID as the QR code content
+                const qrContent = attendee.code;
+                new QRCode(qrElement, {
+                    text: qrContent, // QR code now contains just the ID
+                    width: size,
+                    height: size,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+                qrElement.querySelectorAll('canvas, img').forEach((node) => {
+                    node.style.width = '100%';
+                    node.style.height = '100%';
+                });
+            }
+        };
+
+
+        // Send print request to backend API
+        const sendToPrinter = async (attendee) => {
+            try {
+                // Sanitize attendee data to remove problematic characters before sending to backend.
+                const sanitizedAttendee = {
+                    ...attendee,
+                    name: String(attendee.name ?? '').replace(/[^\x00-\x7F]/g, ""),
+                    jobTitle: String(attendee.jobTitle ?? '').replace(/[^\x00-\x7F]/g, ""),
+                    category: String(attendee.category ?? '').replace(/[^\x00-\x7F]/g, ""),
+                    company: String(attendee.company ?? '').replace(/[^\x00-\x7F]/g, ""),
+                    code: String(attendee.code ?? '').replace(/[^\x00-\x7F]/g, "")
+                };
+                const response = await fetch(`${BACKEND_URL}/api/print`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ attendee: sanitizedAttendee })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    console.log('Print command sent successfully via backend!');
+                    return { success: true, message: result.message };
+                } else {
+                    throw new Error(result.error || `HTTP error! Status: ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Failed to send print request to backend:', error);
+                return { success: false, error: error.message };
+            }
+        };
+
+        const handlePreview = async () => {
+            const code = attendeeCodeInput.value.trim();
+            if (!code) {
+                errorMessage.textContent = 'Please enter an attendee code.';
+                return;
+            }
+
+            try {
+                // Try to fetch attendee data from API using the entered code as both idreg and idma
+                // First try idreg
+                try {
+                    currentAttendee = await fetchAttendeeData('idreg', code);
+                } catch (idregError) {
+                    // If idreg fails, try idma
+                    try {
+                        currentAttendee = await fetchAttendeeData('idma', code);
+                    } catch (idmaError) {
+                        // Both failed, throw the original error
+                        throw idregError;
+                    }
+                }
+                
+                errorMessage.textContent = '';
+                badgePlaceholder.classList.add('hidden');
+                badgePreviewContainer.classList.remove('hidden');
+                badgePreviewContainer.classList.add('flex');
+                badgePreviewContainer.innerHTML = createBadgeHTML(currentAttendee);
+                badgePrintContainer.innerHTML = createPrintBadgeHTML(currentAttendee);
+
+                // Generate QR code for the on-screen preview
+                setTimeout(() => {
+                    generateQRCode(`qrcode-${safeDomId(currentAttendee.code)}`, currentAttendee, 132);
+                    
+                    // Generate QR code for the print version as well
+                    generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120); // 80 * 1.5 = 120
+                }, 0);
+
+                printBtn.disabled = false;
+                printBtn.classList.remove('bg-slate-400', 'cursor-not-allowed');
+                printBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+            } catch (error) {
+                console.error('Error fetching attendee data:', error);
+                errorMessage.textContent = `Attendee with Ticket Number "${code}" not found. Please check on Front Desk.`;
+                badgePlaceholder.classList.remove('hidden');
+                badgePreviewContainer.classList.add('hidden');
+                badgePreviewContainer.classList.remove('flex');
+                
+                printBtn.disabled = true;
+                printBtn.classList.add('bg-slate-400', 'cursor-not-allowed');
+                printBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+            }
+        };
+        
+        const insertCode = (code) => {
+            // Insert the code into the input field
+            attendeeCodeInput.value = code;
+            
+            // If in scan mode, switch to input mode
+            if (qrScannerArea.classList.contains('hidden') === false) {
+                switchToInputMode();
+            }
+            
+            // Focus on the input field
+            attendeeCodeInput.focus();
+            
+            // Optionally, you can auto-preview the badge
+            // Uncomment the next line if you want automatic preview
+            // handlePreview();
+        };
+        
+        // Make insertCode available globally for onclick handlers
+        window.insertCode = insertCode;
+
+        const updateTime = () => {
+            const now = new Date();
+            const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+            const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            
+            timeEl.textContent = now.toLocaleTimeString('en-US', timeOptions);
+            dateEl.textContent = now.toLocaleDateString('en-US', dateOptions);
+        };
+
+        const showScanSuccess = (attendee) => {
+            scannedAttendeeName.textContent = attendee.name;
+            scanSuccessNotification.classList.remove('hidden');
+            
+            // Hide notification after 3 seconds to allow for quick scanning
+            setTimeout(() => {
+                scanSuccessNotification.classList.add('hidden');
+            }, 3000);
+        };
+
+        // Function to handle manual ID entry (separate from API details)
+        const handleManualIdEntry = async (idTicket) => {
+            try {
+                // Fetch attendee data from API using the manual ID as both idreg and idma
+                // First try idreg
+                try {
+                    currentAttendee = await fetchAttendeeData('idreg', idTicket);
+                } catch (idregError) {
+                    // If idreg fails, try idma
+                    try {
+                        currentAttendee = await fetchAttendeeData('idma', idTicket);
+                    } catch (idmaError) {
+                        // Both failed, throw the original error
+                        throw idregError;
+                    }
+                }
+                
+                attendeeCodeInput.value = idTicket;
+                
+                errorMessage.textContent = '';
+                badgePlaceholder.classList.add('hidden');
+                badgePreviewContainer.classList.remove('hidden');
+                badgePreviewContainer.classList.add('flex');
+                badgePreviewContainer.innerHTML = createBadgeHTML(currentAttendee);
+                badgePrintContainer.innerHTML = createPrintBadgeHTML(currentAttendee);
+                
+                setTimeout(() => {
+                    generateQRCode(`qrcode-${safeDomId(currentAttendee.code)}`, currentAttendee, 132);
+                    generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120); // 80 * 1.5 = 120
+                }, 0);
+                
+                printBtn.disabled = false;
+                printBtn.classList.remove('bg-slate-400', 'cursor-not-allowed');
+                printBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                
+                return true;
+            } catch (error) {
+                console.error('Error fetching attendee data:', error);
+                errorMessage.textContent = `Attendee with ID "${idTicket}" not found or API error.`;
+                return false;
+            }
+        };
+
+        const startScanner = () => {
+            qrStatus.textContent = 'Camera is active - Point at QR code to scan';
+            
+            // Start the real camera for scanning
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode("qr-reader");
+            }
+            
+            let isProcessing = false; // Flag to prevent multiple simultaneous processing
+            const qrCodeSuccessCallback = async (decodedText, decodedResult) => {
+                // Prevent processing if already handling a QR code
+                if (isProcessing) {
+                    return;
+                }
+                
+                isProcessing = true;
+                
+                try {
+                    // Extract idreg or idma from the URL if it matches the expected format
+                    const idregPattern = /https:\/\/tickets\.w\.media\/link\?idreg=(\d+)/;
+                    const idmaPattern = /https:\/\/tickets\.w\.media\/link\?idma=(\d+)/;
+                    const idregMatch = decodedText.match(idregPattern);
+                    const idmaMatch = decodedText.match(idmaPattern);
+                    
+                    if (idregMatch) {
+                        const idValue = idregMatch[1]; // Extract the ID from the URL
+                        
+                        try {
+                            // Fetch attendee data from API using the extracted ID as idreg
+                            currentAttendee = await fetchAttendeeData('idreg', idValue);
+                            
+                            attendeeCodeInput.value = idValue; // Store the ID in the input field
+                            qrStatus.textContent = 'QR Code processed successfully';
+                            
+                            // Generate the badge content
+                            badgePlaceholder.classList.add('hidden');
+                            badgePreviewContainer.classList.remove('hidden');
+                            badgePreviewContainer.classList.add('flex');
+                            badgePreviewContainer.innerHTML = createBadgeHTML(currentAttendee);
+                            badgePrintContainer.innerHTML = createPrintBadgeHTML(currentAttendee);
+                            
+                            setTimeout(() => {
+                                generateQRCode(`qrcode-${safeDomId(currentAttendee.code)}`, currentAttendee, 132);
+                                generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120); // 80 * 1.5 = 120
+                            }, 0);
+                            
+                            printBtn.disabled = false;
+                            printBtn.classList.remove('bg-slate-400', 'cursor-not-allowed');
+                            printBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                            
+                            // Automatically print the badge without showing popup
+                            const result = await sendToPrinter(currentAttendee);
+                            if (result.success) {
+                                qrStatus.textContent = 'Badge printed! Ready to scan next QR code.';
+                                
+                                // Show success notification briefly
+                                showScanSuccess(currentAttendee);
+                            } else {
+                                qrStatus.textContent = `Print failed: ${result.error}`;
+                            }
+                            
+                        } catch (error) {
+                            console.error('Error fetching attendee data:', error);
+                            qrStatus.textContent = `Error: ${error.message}`;
+                        }
+                    } else if (idmaMatch) {
+                        const idValue = idmaMatch[1]; // Extract the ID from the URL
+                        
+                        try {
+                            // Fetch attendee data from API using the extracted ID as idma
+                            currentAttendee = await fetchAttendeeData('idma', idValue);
+                            
+                            attendeeCodeInput.value = idValue; // Store the ID in the input field
+                            qrStatus.textContent = 'QR Code processed successfully';
+                            
+                            // Generate the badge content
+                            badgePlaceholder.classList.add('hidden');
+                            badgePreviewContainer.classList.remove('hidden');
+                            badgePreviewContainer.classList.add('flex');
+                            badgePreviewContainer.innerHTML = createBadgeHTML(currentAttendee);
+                            badgePrintContainer.innerHTML = createPrintBadgeHTML(currentAttendee);
+                            
+                            setTimeout(() => {
+                                generateQRCode(`qrcode-${safeDomId(currentAttendee.code)}`, currentAttendee, 132);
+                                generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120); // 80 * 1.5 = 120
+                            }, 0);
+                            
+                            printBtn.disabled = false;
+                            printBtn.classList.remove('bg-slate-400', 'cursor-not-allowed');
+                            printBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                            
+                            // Automatically print the badge without showing popup
+                            const result = await sendToPrinter(currentAttendee);
+                            if (result.success) {
+                                qrStatus.textContent = 'Badge printed! Ready to scan next QR code.';
+                                
+                                // Show success notification briefly
+                                showScanSuccess(currentAttendee);
+                            } else {
+                                qrStatus.textContent = `Print failed: ${result.error}`;
+                            }
+                            
+                        } catch (error) {
+                            console.error('Error fetching attendee data:', error);
+                            qrStatus.textContent = `Error: ${error.message}`;
+                        }
+                    } else {
+                        qrStatus.textContent = `Invalid QR format: ${decodedText}`;
+                    }
+                } finally {
+                    // Reset the processing flag after a short delay to prevent multiple scans of the same QR
+                    setTimeout(() => {
+                        isProcessing = false;
+                    }, 3000); // Wait 3 seconds before allowing another scan
+                }
+            };
+            
+            const config = {
+                fps: 10,
+                qrbox: { width: 450, height: 450 }
+            };
+            
+            // ==========================================================
+            // === THIS IS THE MODIFIED FUNCTION FOR IPAD SUPPORT ===
+            // ==========================================================
+            const cameraPermissionAndStart = async () => {
+                try {
+                    // Check if we're on localhost, 127.0.0.1, or a local IP address (for network access) or HTTPS (required for camera access)
+                    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                    const isLocalNetwork = /^192\.168\.\d+\.\d+$/.test(window.location.hostname) ||
+                                            /^10\.\d+\.\d+\.\d+$/.test(window.location.hostname) ||
+                                            /^172\.(1[6-9]|2[0-9]|3[01])\.\d+\.\d+$/.test(window.location.hostname) ||
+                                            window.location.hostname === '0.0.0.0';
+                    const isHttps = window.location.protocol === 'https:';
+                    
+                    if (!isLocalhost && !isLocalNetwork && !isHttps) {
+                        qrStatus.textContent = 'Camera access requires HTTPS. Please run on a secure connection.';
+                        console.error('Camera access requires HTTPS, localhost, or local network address.');
+                        return;
+                    }
+                    
+                    // --- MODIFIED SECTION ---
+                    // This is much more reliable on mobile devices like iPads.
+                    // It directly requests the 'environment' (back) camera
+                    // instead of guessing based on camera labels.
+                    await html5QrCode.start(
+                        { facingMode: "environment" }, // Request the back camera
+                        config,
+                        qrCodeSuccessCallback
+                    );
+                    // --- END MODIFIED SECTION ---
+
+                    qrStatus.textContent = 'Camera is active - Point at QR code to scan';
+
+                } catch (err) {
+                    // Provide more helpful error messages
+                    if (err.name === "NotReadableError" || err.message.includes("Could not start video source")) {
+                        qrStatus.textContent = 'No suitable camera found or camera is in use.';
+                    } else if (err.name === "NotAllowedError") {
+                        qrStatus.textContent = 'Camera permission was denied. Please allow camera access in your browser settings.';
+                    } else {
+                        qrStatus.textContent = `Camera error: ${err.message || 'Unable to start camera'}`;
+                    }
+                    console.error("Unable to start scanning.", err);
+                }
+            };
+            // ==========================================================
+            // === END OF MODIFIED FUNCTION ===
+            // ==========================================================
+            
+            cameraPermissionAndStart();
+        };
+
+        const stopScanner = () => {
+            
+            // Stop the real camera
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().then(() => {
+                    console.log("QR Code scanning stopped.");
+                }).catch(err => {
+                    console.error("Failed to stop QR Code scanning.", err);
+                });
+            }
+        };
+
+        const switchToInputMode = () => {
+            stopScanner();
+            
+            // Hide scanner and show normal layout
+            qrScannerArea.classList.add('hidden');
+            qrScannerArea.classList.remove('full-height');
+            inputArea.classList.remove('hidden');
+            
+            // Hide success notification if visible
+            scanSuccessNotification.classList.add('hidden');
+            
+            // Hide header in right column
+            scanModeHeader.classList.add('hidden');
+            
+            modeInputBtn.classList.add('bg-blue-600', 'text-white');
+            modeInputBtn.classList.remove('text-blue-200', 'hover:bg-blue-600', 'hover:text-white');
+            modeScanBtn.classList.remove('bg-blue-600', 'text-white');
+            modeScanBtn.classList.add('text-blue-200', 'hover:bg-blue-600', 'hover:text-white');
+            
+            // Ensure badge preview remains visible if there's a current attendee
+            if (currentAttendee) {
+                badgePlaceholder.classList.add('hidden');
+                badgePreviewContainer.classList.remove('hidden');
+                badgePreviewContainer.classList.add('flex');
+            }
+        };
+
+        const switchToScanMode = () => {
+            // Show scanner full height in left column
+            qrScannerArea.classList.remove('hidden');
+            qrScannerArea.classList.add('full-height');
+            
+            // Hide input area
+            inputArea.classList.add('hidden');
+            
+            // Show header in right column
+            scanModeHeader.classList.remove('hidden');
+            
+            modeScanBtn.classList.add('bg-blue-600', 'text-white');
+            modeScanBtn.classList.remove('text-blue-200', 'hover:bg-blue-600', 'hover:text-white');
+            modeInputBtn.classList.remove('bg-blue-600', 'text-white');
+            modeInputBtn.classList.add('text-blue-200', 'hover:bg-blue-600', 'hover:text-white');
+            
+            startScanner();
+            
+            // Ensure badge preview remains visible if there's a current attendee
+            if (currentAttendee) {
+                badgePlaceholder.classList.add('hidden');
+                badgePreviewContainer.classList.remove('hidden');
+                badgePreviewContainer.classList.add('flex');
+            }
+        };
+
+        // Debug function to show badge content temporarily
+        const showDebugBadge = () => {
+            const debugBadge = document.getElementById('debug-badge');
+            if (debugBadge && currentAttendee) {
+                debugBadge.innerHTML = badgePrintContainer.innerHTML;
+                debugBadge.style.display = 'block';
+                
+                // Hide after 5 seconds
+                setTimeout(() => {
+                    debugBadge.style.display = 'none';
+                }, 5000);
+            }
+        };
+
+        let handlePrintProcessing = false; // Flag to prevent multiple print attempts from Print button
+        // Print function - send request to backend API
+        const handlePrint = async () => {
+            if (!currentAttendee || printBtn.disabled || handlePrintProcessing) return;
+
+            handlePrintProcessing = true;
+            console.log('Starting print via backend API...');
+
+            // Update button to show printing status
+            const originalText = printBtn.textContent;
+            printBtn.textContent = 'Sending to Printer...';
+            printBtn.disabled = true;
+
+            try {
+                // Send attendee data to backend API
+                const result = await sendToPrinter(currentAttendee);
+
+                if (result.success) {
+                    // Show success feedback
+                    printBtn.textContent = 'Print Sent!';
+                    // Close the scan success notification after successful print
+                    scanSuccessNotification.classList.add('hidden');
+                    setTimeout(() => {
+                        printBtn.textContent = originalText;
+                        printBtn.disabled = false;
+                        handlePrintProcessing = false;
+                    }, 200);
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                console.error('Print failed:', error);
+                printBtn.textContent = 'Print Failed';
+                setTimeout(() => {
+                    printBtn.textContent = originalText;
+                    printBtn.disabled = false;
+                    handlePrintProcessing = false;
+                }, 3000);
+                // Show error to user
+                errorMessage.textContent = `Print failed: ${error.message}`;
+            }
+        };
+
+        // --- Event Listeners ---
+        previewBtn.addEventListener('click', handlePreview);
+        printBtn.addEventListener('click', handlePrint);
+        attendeeCodeInput.addEventListener('keyup', (event) => { if (event.key === 'Enter') handlePreview(); });
+        modeInputBtn.addEventListener('click', switchToInputMode);
+        modeScanBtn.addEventListener('click', switchToScanMode);
+        closeScannerBtn.addEventListener('click', switchToInputMode);
+        
+        let printNowProcessing = false; // Flag to prevent multiple print attempts from Print Now button
+        printNowBtn.addEventListener('click', async () => {
+            // Prevent multiple clicks while processing
+            if (printNowProcessing) {
+                return;
+            }
+            
+            printNowProcessing = true;
+            
+            try {
+                // Hide the notification after clicking Print Now
+                scanSuccessNotification.classList.add('hidden');
+                
+                // Don't switch to input mode - stay in scan mode
+                // Ensure currentAttendee is set before printing
+                if (currentAttendee) {
+                    const result = await sendToPrinter(currentAttendee);
+                    if (result.success) {
+                        qrStatus.textContent = 'Badge printed! Ready to scan next QR code.';
+                    } else {
+                        qrStatus.textContent = `Print failed: ${result.error}`;
+                    }
+                } else {
+                    console.error('No current attendee to print');
+                    qrStatus.textContent = 'Error: No attendee data to print';
+                }
+            } catch (error) {
+                console.error('Error in printNowBtn handler:', error);
+                qrStatus.textContent = `Print error: ${error.message}`;
+            } finally {
+                // Reset the processing flag after a delay
+                setTimeout(() => {
+                    printNowProcessing = false;
+                }, 3000);
+                
+                setTimeout(() => {
+                    qrStatus.textContent = 'Camera is active - Point at QR code to scan';
+                }, 3000);
+            }
+        });
+        
+        
+        // Android Print Modal event listeners
+        const androidPrintModal = document.getElementById('android-print-modal');
+        const androidModalClose = document.getElementById('android-modal-close');
+        const androidModalPrint = document.getElementById('android-modal-print');
+        
+        androidModalClose.addEventListener('click', () => {
+            androidPrintModal.classList.add('hidden');
+        });
+        
+        androidModalPrint.addEventListener('click', () => {
+            androidPrintModal.classList.add('hidden');
+            // Try to trigger print again
+            setTimeout(() => {
+                try {
+                    window.print();
+                } catch (error) {
+                    console.log('Print still not supported, showing fallback message');
+                    alert('Please use your browser\'s menu to print this page (⋮ → Print)');
+                }
+            }, 100);
+        });
+        
+        // Close modal when clicking outside
+        androidPrintModal.addEventListener('click', (e) => {
+            if (e.target === androidPrintModal) {
+                androidPrintModal.classList.add('hidden');
+            }
+        });
+        
+
+        // --- Initial Setup ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Ensure manual mode is active by default
+            switchToInputMode();
+            
+            attendeeCodeInput.placeholder = 'Enter your ID Ticket...';
+            updateTime();
+            setInterval(updateTime, 1000);
+        });
+    </script>
+</body>
+</html>

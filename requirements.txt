@@ -1,0 +1,12 @@
+# Python dependencies for the ZPL Printer Migration (server.py).
+# Target platform: Windows with Python 3.10+.
+# pywin32 is required at runtime for the Windows print spooler (win32print).
+# hypothesis and pytest are required to run the test suite under tests/.
+
+flask>=3.0,<4.0
+python-dotenv>=1.0,<2.0
+pywin32>=306
+qrcode>=7.4,<9.0
+Pillow>=10.0,<12.0
+hypothesis>=6.100
+pytest>=8.0
