@@ -489,13 +489,14 @@ def status():
 # --- Execute ---
 if __name__ == "__main__":
     print("Starting HTTPS server for badge printing application...")
-    print("Server will be accessible at: https://192.168.1.2:8443")
+    print("Local URL: https://127.0.0.1:8443")
+    print("Network URL: https://<this-server-ip>:8443")
     print("")
     print("NOTE: This server uses Flask's ad-hoc SSL certificates which work on all systems")
     print("without requiring OpenSSL to be installed separately.")
     print("")
     print("Certificate warnings are normal for development - accept them in your browser.")
-    print("In browser, click 'Advanced' -> 'Proceed to 192.168.1.2 (unsafe)'")
+    print("In browser, click 'Advanced' -> proceed to the server address.")
     print(f"Configuration: PRINTER_QUEUE={PRINTER_QUEUE}, USE_TEST_MODE={USE_TEST_MODE}")
     
     # Use Flask's ad-hoc SSL which works on all systems without requiring OpenSSL
