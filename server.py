@@ -13,10 +13,8 @@ from PIL import Image
 load_dotenv()
 
 # Guarded import of pywin32's win32print. On hosts where pywin32 is not
-# installed (e.g. non-Windows dev machines) we still want server to import
-# cleanly so test mode and the rest of the HTTP surface remain usable; the
-# Printer_Transport surfaces a clean error string when called in normal mode.
-# Per spec zpl-printer-migration task 5.1 (requirements 6.6).
+# installed, the server still imports cleanly and reports a clear error if
+# normal print mode is used.
 try:
     import win32print
     WIN32PRINT_AVAILABLE = True
@@ -336,7 +334,7 @@ def send_zpl_to_printer(zpl: str) -> tuple[bool, str]:
     ``test_print_command.prn`` in the current working directory and no print
     job is dispatched. In normal mode the bytes are submitted as a RAW print
     job to the queue named by ``PRINTER_QUEUE`` via ``win32print``; the
-    spooler is responsible for forwarding them verbatim to the printer.
+    spooler is responsible for forwarding them verbatim to the USB printer.
 
     The function MUST NOT raise. Every Win32 / OS error is caught and
     converted into the ``(False, message)`` form so callers can translate

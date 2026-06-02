@@ -315,7 +315,7 @@
                     <li>Choose your printer or save as PDF</li>
                     <li>Adjust settings if needed and tap <strong>"Print"</strong></li>
                 </ol>
-                <p class="text-xs text-slate-500 mt-3">💡 Tip: Make sure your printer is connected to the same Wi-Fi network</p>
+                <p class="text-xs text-slate-500 mt-3">Tip: Make sure the USB printer is connected to this server computer.</p>
             </div>
             <div class="flex gap-3">
                 <button id="android-modal-close" class="flex-1 bg-slate-200 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-300 transition">Got it</button>
@@ -326,8 +326,7 @@
 
     <script>
         // Backend API Configuration - the backend sends RAW ZPL directly to the printer.
-        // Auto-detect backend URL: use the current page origin so it works
-        // via ngrok, local LAN, or localhost without manual edits.
+        // Auto-detect backend URL from the page origin so clients can reach this server.
         const BACKEND_URL = window.location.origin;
 
         // DOM Elements
