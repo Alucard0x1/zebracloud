@@ -5,6 +5,7 @@ import io
 import json
 import re
 import secrets
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -89,6 +90,8 @@ if "ALLOW_PRINTER_QUEUE_FALLBACK" in os.environ:
 PRINT_API_KEY = os.environ.get("PRINT_API_KEY", "")
 EXTERNAL_API_KEY = os.environ.get("EXTERNAL_API_KEY", "")
 EXTERNAL_API_BASE_URL = os.environ.get("EXTERNAL_API_BASE_URL", "https://tickets.w.media/link")
+ATTENDEE_CACHE_TTL_SECONDS = int(os.environ.get("ATTENDEE_CACHE_TTL_SECONDS", "300"))
+ATTENDEE_CACHE: dict[tuple[str, str], tuple[float, dict]] = {}
 
 # Initialize the Flask web server
 app = Flask(__name__, static_folder='.')
@@ -139,6 +142,24 @@ def _print_request_authorized() -> bool:
     if PRINT_API_KEY and provided and secrets.compare_digest(provided, PRINT_API_KEY):
         return True
     return _request_is_same_origin()
+
+
+def _get_cached_attendee(param_type: str, param_value: str) -> dict | None:
+    cached = ATTENDEE_CACHE.get((param_type, param_value))
+    if not cached:
+        return None
+    expires_at, attendee = cached
+    if expires_at <= time.time():
+        ATTENDEE_CACHE.pop((param_type, param_value), None)
+        return None
+    return attendee
+
+
+def _set_cached_attendee(param_type: str, param_value: str, attendee: dict) -> None:
+    ATTENDEE_CACHE[(param_type, param_value)] = (
+        time.time() + ATTENDEE_CACHE_TTL_SECONDS,
+        attendee,
+    )
 
 def derive_name_line1(name: str) -> str:
     """
@@ -713,6 +734,10 @@ def attendee_lookup():
     if param_type not in {"idreg", "idma"} or not re.fullmatch(r"\d{1,30}", param_value):
         return jsonify({"success": False, "error": "Invalid attendee lookup parameters."}), 400
 
+    cached_attendee = _get_cached_attendee(param_type, param_value)
+    if cached_attendee:
+        return jsonify({"success": True, "attendee": cached_attendee, "cached": True})
+
     query = urllib.parse.urlencode({param_type: param_value})
     url = f"{EXTERNAL_API_BASE_URL}?{query}"
     req = urllib.request.Request(url, headers={"X-API-KEY": EXTERNAL_API_KEY}, method="GET")
@@ -737,6 +762,7 @@ def attendee_lookup():
         "company": data.get("company_name") or "",
         "eventcat": data.get("eventcat") or "N/A",
     }
+    _set_cached_attendee(param_type, param_value, attendee)
     return jsonify({"success": True, "attendee": attendee})
 
 

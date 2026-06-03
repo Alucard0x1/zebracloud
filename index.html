@@ -468,6 +468,17 @@
             }
         };
 
+        const fetchAttendeeByAnyId = async (idTicket) => {
+            const lookups = [
+                fetchAttendeeData('idreg', idTicket),
+                fetchAttendeeData('idma', idTicket)
+            ];
+            const results = await Promise.allSettled(lookups);
+            const success = results.find(result => result.status === 'fulfilled');
+            if (success) return success.value;
+            throw results[0].reason || new Error('Attendee lookup failed');
+        };
+
         const createBadgeHTML = (attendee) => {
             const codeId = safeDomId(attendee.code);
             const safeCategory = escapeHTML(attendee.category);
@@ -703,19 +714,7 @@
             }
 
             try {
-                // Try to fetch attendee data from API using the entered code as both idreg and idma
-                // First try idreg
-                try {
-                    currentAttendee = await fetchAttendeeData('idreg', code);
-                } catch (idregError) {
-                    // If idreg fails, try idma
-                    try {
-                        currentAttendee = await fetchAttendeeData('idma', code);
-                    } catch (idmaError) {
-                        // Both failed, throw the original error
-                        throw idregError;
-                    }
-                }
+                currentAttendee = await fetchAttendeeByAnyId(code);
                 
                 errorMessage.textContent = '';
                 badgePlaceholder.classList.add('hidden');
@@ -790,19 +789,7 @@
         // Function to handle manual ID entry (separate from API details)
         const handleManualIdEntry = async (idTicket) => {
             try {
-                // Fetch attendee data from API using the manual ID as both idreg and idma
-                // First try idreg
-                try {
-                    currentAttendee = await fetchAttendeeData('idreg', idTicket);
-                } catch (idregError) {
-                    // If idreg fails, try idma
-                    try {
-                        currentAttendee = await fetchAttendeeData('idma', idTicket);
-                    } catch (idmaError) {
-                        // Both failed, throw the original error
-                        throw idregError;
-                    }
-                }
+                currentAttendee = await fetchAttendeeByAnyId(idTicket);
                 
                 attendeeCodeInput.value = idTicket;
                 
