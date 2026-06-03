@@ -1,6 +1,7 @@
 .env
 __pycache__/
 *.pyc
+node_modules/
 test_print_command.prn
 test_ticket_api.py
 ngrok.exe

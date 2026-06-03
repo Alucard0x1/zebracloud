@@ -747,7 +747,8 @@ def attendee_lookup():
             payload = response.read().decode("utf-8")
             data = json.loads(payload)
     except urllib.error.HTTPError as e:
-        return jsonify({"success": False, "error": f"Ticket API returned HTTP {e.code}."}), 502
+        status_code = 404 if e.code == 404 else 502
+        return jsonify({"success": False, "error": f"Ticket API returned HTTP {e.code}."}), status_code
     except (urllib.error.URLError, TimeoutError) as e:
         return jsonify({"success": False, "error": f"Ticket API request failed: {e}"}), 502
     except json.JSONDecodeError:
