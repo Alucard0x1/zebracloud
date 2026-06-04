@@ -353,6 +353,7 @@
         let currentAttendee = null;
         let html5QrCode = null;
         let selectedPrinterLabel = DEFAULT_PRINTER_LABEL;
+        window.allUsbDevices = [];
 
         const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
             '&': '&amp;',
@@ -415,24 +416,79 @@
 
         const loadPrinters = async () => {
             try {
-                const response = await fetch(`${BACKEND_URL}/api/printers`, { method: 'GET' });
+                const response = await fetch(`${BACKEND_URL}/api/printers/debug`, { method: 'GET' });
                 if (!response.ok) return;
                 const data = await response.json();
-                if (!data.success || !Array.isArray(data.printers) || data.printers.length === 0) return;
-
-                data.printers.forEach((printer) => {
-                    const option = document.createElement('option');
-                    option.value = printer.label;
-                    option.textContent = printer.label;
-                    if (printer.label === DEFAULT_PRINTER_LABEL) option.selected = true;
-                    printerSelect.appendChild(option);
+                
+                // Store USB devices for matching
+                window.allUsbDevices = data.usb_devices || [];
+                
+                // Check for configured printers first
+                const configured = data.configured_zebra_printers || [];
+                const discoveredSerials = data.discovered_zebra_usb_serials || [];
+                const installedZebraQueues = data.zebra_queues || [];
+                
+                // Build map of serial -> queue for matching
+                const serialToQueue = {};
+                installedZebraQueues.forEach(q => {
+                    const serials = discoverSerialsFromQueue(q.name);
+                    serials.forEach(s => serialToQueue[s] = q.name);
                 });
+                
+                // Clear existing options
+                printerSelect.innerHTML = '<option value="">Auto-detect Zebra USB printer</option>';
+                
+                // Add configured printers with labels
+                const addedLabels = new Set();
+                if (configured.length > 0) {
+                    configured.forEach((printer) => {
+                        if (typeof printer === 'object' && printer.label && printer.label.trim()) {
+                            const label = printer.label.trim();
+                            const value = printer.queue || printer.serial || label;
+                            const option = document.createElement('option');
+                            option.value = value;
+                            option.textContent = `${label}${printer.queue ? '' : ' (no queue)'}`;
+                            if (label === DEFAULT_PRINTER_LABEL) option.selected = true;
+                            printerSelect.appendChild(option);
+                            addedLabels.add(label);
+                        }
+                    });
+                }
+                
+                // Add discovered printers without configuration
+                if (discoveredSerials.length > 0 && addedLabels.size === 0) {
+                    discoveredSerials.forEach((serial, index) => {
+                        const queueName = serialToQueue[serial] || 'Auto-detected';
+                        const label = `Zebra Printer ${index + 1} (${serial.slice(-8)})`;
+                        const option = document.createElement('option');
+                        option.value = queueName;
+                        option.textContent = label;
+                        if (index === 0 && !printerSelect.querySelector('[selected]')) option.selected = true;
+                        printerSelect.appendChild(option);
+                    });
+                }
+                
                 selectedPrinterLabel = printerSelect.value;
-                printerSelectArea.classList.remove('hidden');
-                printerStatus.textContent = selectedPrinterLabel ? `Using ${selectedPrinterLabel}` : 'Using auto-detected Zebra USB printer.';
+                if (printerSelect.options.length > 1) {
+                    printerSelectArea.classList.remove('hidden');
+                    printerStatus.textContent = selectedPrinterLabel ? `Using ${selectedPrinterLabel}` : 'Using auto-detected Zebra USB printer.';
+                }
             } catch (error) {
                 console.warn('Unable to load printer list.', error);
             }
+        };
+        
+        // Helper to extract serials from printer queue info
+        const discoverSerialsFromQueue = (queueName) => {
+            const serials = [];
+            window.allUsbDevices.forEach(device => {
+                const text = `${device.name} ${device.pnp_id}`.toLowerCase();
+                const queueLower = queueName.toLowerCase();
+                if (text.includes(queueLower) || queueLower.includes(text)) {
+                    if (device.serial) serials.push(device.serial);
+                }
+            });
+            return serials;
         };
 
         // Function to fetch attendee data from external API
