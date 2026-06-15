@@ -3,7 +3,12 @@
   "USE_TEST_MODE": false,
   "ZEBRA_USB_SERIALS": [],
   "ZEBRA_USB_SERIAL": "",
-  "ZEBRA_PRINTERS": [],
+  "ZEBRA_PRINTERS": [
+    {
+      "label": "Zebra ZD421",
+      "queue": "ZDesigner ZD421-203dpi ZPL"
+    }
+  ],
   "ZEBRA_MODEL_KEYWORDS": [
     "ZDesigner",
     "Zebra",

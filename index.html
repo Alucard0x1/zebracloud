@@ -416,7 +416,10 @@
 
         const loadPrinters = async () => {
             try {
-                const response = await fetch(`${BACKEND_URL}/api/printers/debug`, { method: 'GET' });
+                const response = await fetch(`${BACKEND_URL}/api/printers/debug`, { 
+                    method: 'GET',
+                    headers: { 'X-API-Key': 'test123' }
+                });
                 if (!response.ok) return;
                 const data = await response.json();
                 
@@ -726,7 +729,8 @@
                 const response = await fetch(`${BACKEND_URL}/api/print`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-API-Key': 'test123'
                     },
                     body: JSON.stringify({
                         print_mode: 'image',

@@ -557,6 +557,14 @@ def find_zebra_usb_printer_queue(target_label: str = "", target_serial: str = ""
 
     target_label = str(target_label or "").strip()
     target_serial = str(target_serial or "").strip()
+    
+    # First: check if target_label directly matches an installed printer queue name (for any printer type)
+    if target_label:
+        for printer in installed:
+            if printer["name"].lower() == target_label.lower() or printer["name"] == target_label:
+                return True, printer["name"], {"queue": printer, "mode": "direct_queue_match"}
+    
+    # Second: check configured printers
     for item in ZEBRA_PRINTERS:
         if not isinstance(item, dict):
             continue
@@ -867,6 +875,29 @@ def printers_debug():
         target_label=target_label,
         target_serial=target_serial,
     ) if WIN32PRINT_AVAILABLE else (False, "win32print unavailable", None)
+    
+    # Get all installed printers
+    all_printers = _list_installed_printers()
+    
+    # Auto-generate printer list from all installed printers (excluding PDF/OneNote)
+    auto_printers = []
+    for printer in all_printers:
+        name = printer['name']
+        # Skip virtual printers
+        if any(skip in name.lower() for skip in ['pdf', 'onenote', 'xps', 'fax']):
+            continue
+        auto_printers.append({
+            "label": name,
+            "queue": name
+        })
+    
+    # Merge configured printers with auto-detected ones
+    merged_printers = list(ZEBRA_PRINTERS)
+    configured_queues = {p.get('queue', '') for p in ZEBRA_PRINTERS if isinstance(p, dict)}
+    for auto_p in auto_printers:
+        if auto_p['queue'] not in configured_queues:
+            merged_printers.append(auto_p)
+    
     return jsonify({
         "success": True,
         "detected": detected,
@@ -875,8 +906,8 @@ def printers_debug():
         "configured_zebra_usb_serial": ZEBRA_USB_SERIAL,
         "configured_zebra_usb_serials": _configured_serials(),
         "discovered_zebra_usb_serials": discover_zebra_usb_serials(),
-        "configured_zebra_printers": ZEBRA_PRINTERS,
-        "installed_printers": _list_installed_printers(),
+        "configured_zebra_printers": merged_printers,
+        "installed_printers": all_printers,
         "usb_devices": _list_usb_pnp_devices(),
         "zebra_usb_devices": _zebra_usb_devices_only(),
         "metadata": metadata,
@@ -940,18 +971,15 @@ if __name__ == "__main__":
     print(f"Zebra USB serials: {_configured_serials() or '(not set - use POST /api/printers/autofill)'}")
     print(f"Printer fallback queue: {PRINTER_QUEUE} | fallback enabled: {ALLOW_PRINTER_QUEUE_FALLBACK}")
     
-    # Use Flask's ad-hoc SSL which works on all systems without requiring OpenSSL
+    # Use pyngrok for public access
     try:
-        app.run(host='0.0.0.0', port=8443, debug=False, ssl_context='adhoc')
+        from pyngrok import ngrok
+        NGROK_AUTHTOKEN = os.environ.get('NGROK_AUTHTOKEN')
+        if NGROK_AUTHTOKEN:
+            ngrok.set_auth_token(NGROK_AUTHTOKEN)
+        public_url = ngrok.connect(8080)
+        print(f"\nPublic URL: {public_url}\n")
+        app.run(host='0.0.0.0', port=8080, debug=False)
     except Exception as e:
-        if "Address already in use" in str(e) or "Only one usage of each socket" in str(e):
-            print("Port 8443 is already in use.")
-            print("Trying alternative port 8444...")
-            try:
-                app.run(host='0.0.0.0', port=8444, debug=False, ssl_context='adhoc')
-            except Exception as e2:
-                print(f"Could not start HTTPS server on port 8444: {e2}")
-                print("Make sure ports 8443 or 8444 are available and you have proper permissions.")
-        else:
-            print(f"Could not start HTTPS server: {e}")
-            print("Make sure ports are available and you have proper permissions.")
+        print(f"Could not start server: {e}")
+        print("Make sure port is available and you have proper permissions.")
