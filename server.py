@@ -11,8 +11,9 @@ import urllib.parse
 import urllib.request
 from dotenv import load_dotenv
 from flask import Flask, send_from_directory, request, jsonify
+from werkzeug.middleware.proxy_fix import ProxyFix
 import qrcode
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 load_dotenv()
 
@@ -95,6 +96,14 @@ ATTENDEE_CACHE: dict[tuple[str, str], tuple[float, dict]] = {}
 
 # Initialize the Flask web server
 app = Flask(__name__, static_folder='.')
+
+# When running behind a TLS-terminating tunnel/proxy (e.g. ngrok), trust the
+# X-Forwarded-Proto / X-Forwarded-Host headers it sends so that request.host_url
+# reflects the public https origin the browser actually used. Without this the
+# same-origin guard rejects legitimate same-origin browser calls with HTTP 401,
+# because Flask only sees the internal "http://...:8080" origin while the page
+# was loaded over "https://<name>.ngrok-free.app".
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 # Static file serving routes
 @app.route('/')
@@ -337,58 +346,143 @@ def _qr_to_gfa(data: str, target_dots: int = 400) -> str:
 def build_zpl(attendee: dict) -> str:
     """Build a complete ZPL II command string for one badge.
 
-    ``attendee`` is expected to already contain sanitized, prepared fields:
-        - 'category'      : str  (already ASCII-stripped and uppercased)
-        - 'name_line1'    : str  (already ASCII-stripped and derived)
-        - 'company_line1' : str  (already ASCII-stripped, may be '')
-        - 'company_line2' : str  (already ASCII-stripped, '' if not used)
-        - 'code'          : str  (already ASCII-stripped, '' allowed)
+    Label physical dimensions: 101.6 mm wide x 152.4 mm tall (4" x 6").
+    At 203 DPI: 812 dots wide x 1219 dots tall.
 
-    Returns a single ``str`` that, when encoded as ASCII, is a valid ZPL II
-    job framed by ``^XA`` ... ``^XZ``.
+    The top 57 mm (456 dots) is a pre-printed header — do NOT print there.
+    Printable zone: Y 456..1219, height = 763 dots.
 
-    Field emission order:
-      1. ``^XA``
-      2. ``^PON``
-      3. ``^PW800``
-      4. ``^LL1200``
-      5. ``^LH0,0``
-      6. Category : ``^A0N,50,50^FO50,80^FD<cat>^FS``
-      7. Name     : ``^A0N,110,110^FO50,200^FD<name>^FS``
-      8. Company1 : ``^A0N,50,50^FO50,380^FD<c1>^FS``
-      9. Company2 : ``^A0N,50,50^FO50,450^FD<c2>^FS`` (only when non-empty)
-     10. QR       : ``^FO200,640^GFA...^FS``
-     11. ``^PQ1``
-     12. ``^XZ``
+    Layout order (all fields horizontally centered via ^FB), mirroring the
+    badge design in printing.md:
+      1. Name      — dominant, largest font
+      2. Company   — medium font (auto-wraps up to 2 lines)
+      3. Category  — small font, uppercase
+      4. QR code   — large square, centered
 
-    Per spec zpl-printer-migration task 4.2 (requirements 2.1-2.8, 3.1-3.6,
-    4.1-4.3).
+    Horizontal centering uses ZPL Field Block (^FB) with center justification
+    spanning the full label width, so text is truly centered regardless of
+    string length — no character-width guessing.
+
+    ``attendee`` expected fields (already sanitized):
+        - 'category'      : str
+        - 'name_line1'    : str
+        - 'company_line1' : str
+        - 'company_line2' : str  ('' if not used)
+        - 'code'          : str
     """
+    # ── Geometry (dots @ 203 dpi) ─────────────────────────────────────────────
+    LABEL_W        = 812   # 101.6 mm
+    LABEL_H        = 1219  # 152.4 mm
+    HEADER_H       = 456   #  57.0 mm — pre-printed, must stay empty
+    ZONE_TOP       = HEADER_H
+    ZONE_H         = LABEL_H - HEADER_H          # 763 dots usable
+    SIDE_MARGIN    = 20    # left/right text inset
+    MARGIN_TOP     = 24
+    MARGIN_BOTTOM  = 24
+    GAP_NAME_COMP  = 14
+    GAP_COMP_CAT   = 16
+    GAP_CAT_QR     = 30
+
+    # ^FB block width = label minus left+right margins; text centers within it.
+    FB_W = LABEL_W - (2 * SIDE_MARGIN)
+
+    # ── Field data ───────────────────────────────────────────────────────────
     category      = _zpl_escape(attendee.get("category", ""))
     name_line1    = _zpl_escape(attendee.get("name_line1", ""))
     company_line1 = _zpl_escape(attendee.get("company_line1", ""))
     company_line2_raw = attendee.get("company_line2", "")
     company_line2 = _zpl_escape(company_line2_raw)
     qr            = _qr_payload(attendee.get("code", ""))
+    has_company2  = bool(company_line2_raw)
 
+    # ── Smart font sizing (^A0N,h,w; h==w keeps glyphs square) ────────────────
+    # Name dominates the badge; shrinks only for long strings so it still fits
+    # the block width on a single line.
+    def _name_font(text: str) -> int:
+        n = len(text)
+        if n <= 8:   return 120
+        if n <= 12:  return 100
+        if n <= 16:  return 84
+        if n <= 20:  return 70
+        return 58
+
+    def _company_font(text: str) -> int:
+        n = len(text)
+        if n <= 12:  return 56
+        if n <= 18:  return 48
+        if n <= 26:  return 42
+        return 36
+
+    def _category_font(text: str) -> int:
+        n = len(text)
+        if n <= 12:  return 40
+        if n <= 22:  return 34
+        return 30
+
+    name_fs = _name_font(name_line1)
+    comp_fs = _company_font(company_line1)
+    cat_fs  = _category_font(category)
+
+    # ── QR size — large, ~37 % of label width ────────────────────────────────
+    QR_SIZE = min(300, int(LABEL_W * 0.37))      # 300 dots ≈ 37.6 mm
+
+    # ── Vertical layout — stack rows, then center the block in the zone ───────
+    rows_h = (
+        name_fs
+        + GAP_NAME_COMP + comp_fs
+        + (comp_fs if has_company2 else 0)        # second company line
+        + GAP_COMP_CAT  + cat_fs
+        + GAP_CAT_QR    + QR_SIZE
+    )
+    zone_usable = ZONE_H - MARGIN_TOP - MARGIN_BOTTOM
+    v_start     = ZONE_TOP + MARGIN_TOP + max(0, (zone_usable - rows_h) // 2)
+
+    y_name  = v_start
+    y_comp  = y_name + name_fs + GAP_NAME_COMP
+    comp_lines_h = comp_fs * (2 if has_company2 else 1)
+    y_cat   = y_comp + comp_lines_h + GAP_COMP_CAT
+    y_qr    = y_cat  + cat_fs + GAP_CAT_QR
+
+    # Safety clamp so the QR never bleeds off the bottom edge
+    y_qr = min(y_qr, LABEL_H - MARGIN_BOTTOM - QR_SIZE)
+
+    qr_x = (LABEL_W - QR_SIZE) // 2
+
+    # ── Field Block helper: centers text within FB_W starting at SIDE_MARGIN ──
+    def _centered(text: str, fs: int, y: int, max_lines: int = 1) -> str:
+        # ^FB<width>,<max_lines>,<line_spacing>,<justify=C>,<indent>
+        return (
+            f"^A0N,{fs},{fs}"
+            f"^FO{SIDE_MARGIN},{y}"
+            f"^FB{FB_W},{max_lines},0,C,0"
+            f"^FD{text}^FS"
+        )
+
+    # ── Assemble ZPL ─────────────────────────────────────────────────────────
     parts = [
         "^XA",
         "^PON",
-        "^PW800",
-        "^LL1200",
+        f"^PW{LABEL_W}",
+        f"^LL{LABEL_H}",
         "^LH0,0",
-        f"^A0N,50,50^FO50,80^FD{category}^FS",
-        f"^A0N,110,110^FO50,200^FD{name_line1}^FS",
-        f"^A0N,50,50^FO50,380^FD{company_line1}^FS",
+        # 1. Name — dominant, centered
+        _centered(name_line1, name_fs, y_name, max_lines=1),
     ]
-    if company_line2_raw:
-        parts.append(f"^A0N,50,50^FO50,450^FD{company_line2}^FS")
-    # QR code as graphic: 5cm = 400 dots, rendered via Python qrcode library.
-    # Bottom edge 2cm (160 dots) from label bottom: QR top = 1200 - 160 - 400 = 640.
-    # Centered horizontally: (800 - 400) / 2 = 200.
-    qr_data = qr if qr != "NO-CODE" else "NO-CODE"
-    qr_gfa = _qr_to_gfa(qr_data, target_dots=400)
-    parts.append(f"^FO200,640{qr_gfa}")
+
+    # 2. Company — one ^FB block; if a 2nd line exists, allow wrapping/2 lines.
+    if has_company2:
+        company_text = f"{company_line1}\\&{company_line2}"  # \& = line break in ^FB
+        parts.append(_centered(company_text, comp_fs, y_comp, max_lines=2))
+    else:
+        parts.append(_centered(company_line1, comp_fs, y_comp, max_lines=1))
+
+    # 3. Category — centered
+    parts.append(_centered(category, cat_fs, y_cat, max_lines=1))
+
+    # 4. QR code — large, centered
+    qr_gfa = _qr_to_gfa(qr, target_dots=QR_SIZE)
+    parts.append(f"^FO{qr_x},{y_qr}{qr_gfa}")
+
     parts.append("^PQ1")
     parts.append("^XZ")
     return "".join(parts)
@@ -404,6 +498,78 @@ def _extract_usb_serial_from_pnp_id(pnp_id: str) -> str:
     return parts[-1] if len(parts) >= 3 else ""
 
 
+# Windows printer status / attribute bit flags. A duplicate driver copy left on
+# a dead USB port is normally flagged "work offline", so it must not be
+# auto-selected even though it still appears as an installed queue.
+PRINTER_STATUS_OFFLINE = 0x00000080
+PRINTER_ATTRIBUTE_WORK_OFFLINE = 0x00000400
+
+
+def _printer_is_online(status: int, attributes: int) -> bool:
+    """Return True when Windows reports the queue as usable right now."""
+    if int(status or 0) & PRINTER_STATUS_OFFLINE:
+        return False
+    if int(attributes or 0) & PRINTER_ATTRIBUTE_WORK_OFFLINE:
+        return False
+    return True
+
+
+def _to_int_or_none(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _printer_states_by_name() -> dict:
+    """Map queue name -> live readiness info from WMI Win32_Printer.
+
+    win32print's GetPrinter ``Status`` is frequently 0 for USB Zebra queues even
+    when the underlying device is gone or the queue is jammed, so a stale
+    duplicate queue looks identical to the live one. WMI exposes the richer
+    driver state (WorkOffline / PrinterStatus / PrinterState / DetectedErrorState)
+    that does distinguish a genuinely-ready queue from a dead/jammed duplicate.
+
+    Returns an empty dict when WMI is unavailable, in which case callers fall
+    back to the attribute-based ``online`` flag and behave exactly as before.
+    """
+    if not WMI_AVAILABLE:
+        return {}
+    try:
+        printers = wmi.WMI().Win32_Printer()
+    except Exception:
+        return {}
+
+    states = {}
+    for p in printers:
+        name = str(getattr(p, "Name", "") or "")
+        if not name:
+            continue
+        try:
+            work_offline = bool(getattr(p, "WorkOffline", False))
+        except Exception:
+            work_offline = False
+        printer_status = _to_int_or_none(getattr(p, "PrinterStatus", None))
+        printer_state = _to_int_or_none(getattr(p, "PrinterState", None))
+        detected_error = _to_int_or_none(getattr(p, "DetectedErrorState", None))
+        # Ready = not offline, no problem state, and idle/printing. ``None`` is
+        # treated as "no objection" so drivers that omit a field aren't excluded.
+        ready = (
+            not work_offline
+            and printer_state in (0, None)
+            and printer_status in (3, 4, None)
+            and detected_error in (0, 2, None)
+        )
+        states[name] = {
+            "work_offline": work_offline,
+            "printer_status": printer_status,
+            "printer_state": printer_state,
+            "detected_error_state": detected_error,
+            "ready": ready,
+        }
+    return states
+
+
 def _list_installed_printers() -> list[dict]:
     if not WIN32PRINT_AVAILABLE:
         return []
@@ -414,21 +580,43 @@ def _list_installed_printers() -> list[dict]:
     result = []
     for printer in printers:
         queue_name = printer[2]
-        info = {"name": queue_name, "driver": "", "port": ""}
+        info = {"name": queue_name, "driver": "", "port": "", "status": 0, "attributes": 0, "online": True, "ready": True}
         try:
             hprinter = win32print.OpenPrinter(queue_name)
             try:
                 printer_info = win32print.GetPrinter(hprinter, 2)
+                status = printer_info.get("Status", 0) or 0
+                attributes = printer_info.get("Attributes", 0) or 0
+                online = _printer_is_online(status, attributes)
                 info = {
                     "name": printer_info.get("pPrinterName") or queue_name,
                     "driver": printer_info.get("pDriverName") or "",
                     "port": printer_info.get("pPortName") or "",
+                    "status": status,
+                    "attributes": attributes,
+                    "online": online,
+                    "ready": online,
                 }
             finally:
                 win32print.ClosePrinter(hprinter)
         except Exception:
             pass
         result.append(info)
+
+    # Enrich with WMI readiness so a stale/jammed duplicate queue (which
+    # win32print still reports as online) is correctly ranked below the live one.
+    states = _printer_states_by_name()
+    if states:
+        for info in result:
+            st = states.get(info["name"])
+            if not st:
+                continue
+            if st["work_offline"]:
+                info["online"] = False
+            info["printer_status"] = st["printer_status"]
+            info["printer_state"] = st["printer_state"]
+            info["detected_error_state"] = st["detected_error_state"]
+            info["ready"] = bool(st["ready"]) and info.get("online", True)
     return result
 
 
@@ -611,30 +799,258 @@ def find_zebra_usb_printer_queue(target_label: str = "", target_serial: str = ""
             ), {"non_zebra_printers": non_zebra_printers, "usb_devices": usb_devices}
         return False, "No installed Zebra printer queues were detected.", {"installed_printers": installed, "usb_devices": usb_devices}
 
-    if len(zebra_queues) == 1:
-        return True, zebra_queues[0]["name"], {"queue": zebra_queues[0], "matched_usb_devices": matching_usb_devices, "mode": "single_zebra_queue"}
+    # Rank queues by how usable Windows says they are. A stale duplicate copy on
+    # a dead/jammed USB port often still reports as "online" via win32print, so
+    # we additionally prefer queues WMI reports as fully ready (idle, no error,
+    # no jam). Tiers: ready  >  online  >  anything installed.
+    ready_zebra_queues = [q for q in zebra_queues if q.get("ready")]
+    online_zebra_queues = [q for q in zebra_queues if q.get("online", True)]
+    effective_queues = ready_zebra_queues or online_zebra_queues or zebra_queues
 
+    if len(effective_queues) == 1:
+        if ready_zebra_queues:
+            mode = "single_ready_zebra_queue"
+        elif online_zebra_queues:
+            mode = "single_online_zebra_queue"
+        else:
+            mode = "single_zebra_queue"
+        return True, effective_queues[0]["name"], {
+            "queue": effective_queues[0],
+            "matched_usb_devices": matching_usb_devices,
+            "mode": mode,
+        }
+
+    # Try to disambiguate multiple candidate queues using live USB model overlap.
     for usb_device in matching_usb_devices:
         usb_name = usb_device.get("name", "").lower()
         tokens = [t for t in re.split(r"[^a-zA-Z0-9]+", usb_name) if len(t) >= 3]
         candidates = []
-        for queue in zebra_queues:
+        for queue in effective_queues:
             queue_text = f"{queue.get('name', '')} {queue.get('driver', '')}".lower()
             if any(token in queue_text for token in tokens):
                 candidates.append(queue)
         if len(candidates) == 1:
             return True, candidates[0]["name"], {"queue": candidates[0], "usb_device": usb_device, "mode": "model_overlap"}
 
-    return False, (
-        "Multiple Zebra printer queues were detected. Serial numbers were auto-detected, but Windows did not expose "
-        "a safe one-to-one serial -> queue map. Add the correct Windows queue name to each ZEBRA_PRINTERS entry "
-        "after running /api/printers/autofill."
-    ), {"zebra_queues": zebra_queues, "matched_usb_devices": matching_usb_devices, "configured_serials": configured_serials}
+    # Prefer the configured default queue when it is one of the candidates.
+    configured_default = (PRINTER_QUEUE or "").strip().lower()
+    if configured_default:
+        for queue in effective_queues:
+            if queue["name"].strip().lower() == configured_default:
+                return True, queue["name"], {"queue": queue, "mode": "configured_default_online"}
+
+    # Last resort: auto-detect picks the first candidate queue (ready ones first)
+    # so the common single-printer case "just works". The choice is reported in
+    # metadata and the browser dropdown lets the operator override it.
+    chosen = effective_queues[0]
+    return True, chosen["name"], {
+        "queue": chosen,
+        "alternatives": [q["name"] for q in effective_queues],
+        "not_ready_or_offline": [q["name"] for q in zebra_queues if not q.get("ready", q.get("online", True))],
+        "mode": "auto_first_ready" if ready_zebra_queues else "auto_first_online",
+        "note": (
+            "Multiple usable Zebra queues were detected; auto-selected the first. "
+            "Pick a specific printer in the UI, or remove the duplicate/offline "
+            "queues in Windows, for a deterministic choice."
+        ),
+    }
+
+
+def _mm_to_px(mm: float, dpi: int = 203) -> int:
+    """Convert millimetres to whole pixels at the given DPI."""
+    return round(mm / 25.4 * dpi)
+
+
+_WIN_FONTS = r"C:\Windows\Fonts"
+
+
+def _load_font(bold: bool, size: int):
+    """Load Arial (falling back to DejaVu / PIL default) at the given size.
+
+    Ported verbatim from make_label_image.py so the printed badge matches the
+    reference sample.
+    """
+    size = max(6, int(size))
+    names = (["arialbd.ttf", "DejaVuSans-Bold.ttf"] if bold
+             else ["arial.ttf", "DejaVuSans.ttf"])
+    for name in names:
+        for path in (os.path.join(_WIN_FONTS, name), name):
+            try:
+                return ImageFont.truetype(path, size)
+            except OSError:
+                continue
+    try:
+        return ImageFont.load_default(size)
+    except TypeError:
+        return ImageFont.load_default()
+
+
+def _measure(draw, text, font):
+    """Return (width, height, x0, y0) of the text's tight bounding box."""
+    x0, y0, x1, y1 = draw.textbbox((0, 0), text, font=font, anchor="la")
+    return x1 - x0, y1 - y0, x0, y0
+
+
+def _fit_font_to_width(draw, text, bold, size, max_w, min_size=8):
+    """Largest font <= ``size`` whose rendered width fits ``max_w``."""
+    size = max(min_size, int(size))
+    while size > min_size:
+        font = _load_font(bold, size)
+        w, _, _, _ = _measure(draw, text, font)
+        if w <= max_w:
+            return font
+        size -= 2
+    return _load_font(bold, min_size)
+
+
+def _make_qr_image(data: str, size_px: int) -> Image.Image:
+    """Render ``data`` as a square QR image, black on white, with quiet zone."""
+    qr = qrcode.QRCode(
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=1,
+        border=2,  # quiet zone for reliable scanning
+    )
+    qr.add_data(data or "NO-CODE")
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+    return img.resize((size_px, size_px), Image.NEAREST)
+
+
+def render_badge_print_area(content: dict, dpi: int = 203) -> Image.Image:
+    """Render the badge PRINT AREA image (101.6 mm x 95.4 mm) at ``dpi``.
+
+    This is a faithful port of make_label_image.py's layout: each line is
+    shrunk to fit the usable width, the whole stack is scaled down if it would
+    exceed the print area, and the block is vertically centered inside it.
+
+    Order (top -> bottom, horizontally centered):
+        1. Name      (largest, bold)
+        2. Company
+        3. Category  (bold)
+        4. QR code   (centered square)
+        5. Eventcat
+
+    Empty fields are skipped so they leave no phantom gap. The returned image
+    is exactly the print area (no header band); _image_to_gfa() positions it
+    57 mm below the top of the panel.
+    """
+    WIDTH_MM        = 101.6
+    PRINT_AREA_MM   = 95.4
+    SIDE_MARGIN_MM  = 4.0
+    TOP_MARGIN_MM   = 3.0
+    BOTTOM_MARGIN_MM = 3.0
+
+    width_px = _mm_to_px(WIDTH_MM, dpi)
+    print_px = _mm_to_px(PRINT_AREA_MM, dpi)
+    side_m   = _mm_to_px(SIDE_MARGIN_MM, dpi)
+    top_m    = _mm_to_px(TOP_MARGIN_MM, dpi)
+    bot_m    = _mm_to_px(BOTTOM_MARGIN_MM, dpi)
+    usable_w = width_px - 2 * side_m
+    usable_h = print_px - top_m - bot_m
+
+    img = Image.new("RGB", (width_px, print_px), "white")
+    draw = ImageDraw.Draw(img)
+
+    name     = (content.get("name") or "").strip()
+    company  = (content.get("company") or "").strip()
+    category = (content.get("category") or "").strip()
+    eventcat = (content.get("eventcat") or "").strip()
+    qr_data  = content.get("qr_data") or "NO-CODE"
+
+    # spec row: (kind, data, bold, base_size_px, gap_before_px)
+    spec = []
+    if name:
+        spec.append(("text", name, True, 110, 0))
+    if company:
+        spec.append(("text", company, False, 56, 16))
+    if category:
+        spec.append(("text", category, True, 40, 16))
+    spec.append(("qr", qr_data, False, 300, 28))
+    if eventcat:
+        spec.append(("text", eventcat, False, 40, 22))
+
+    def build_plan(scale):
+        plan, total = [], 0.0
+        for kind, data, bold, base, gap in spec:
+            g = gap * scale
+            if kind == "text":
+                font = _fit_font_to_width(draw, data, bold, base * scale, usable_w)
+                w, h, x0, y0 = _measure(draw, data, font)
+                plan.append(("text", data, font, w, h, x0, y0, g))
+                total += g + h
+            else:
+                qs = max(48, int(min(base * scale, usable_w)))
+                plan.append(("qr", data, None, qs, qs, 0, 0, g))
+                total += g + qs
+        return plan, total
+
+    plan, total = build_plan(1.0)
+    scale = 1.0
+    if total > usable_h:
+        lo, hi = 0.1, 1.0
+        for _ in range(22):
+            mid = (lo + hi) / 2
+            p, t = build_plan(mid)
+            if t <= usable_h:
+                plan, total, scale = p, t, mid
+                lo = mid
+            else:
+                hi = mid
+
+    # Vertically center the block inside the print area.
+    cx = width_px / 2
+    y = top_m + max(0.0, (usable_h - total) / 2)
+    for item in plan:
+        kind = item[0]
+        gap = item[-1]
+        y += gap
+        if kind == "text":
+            _, data, font, w, h, x0, y0, _ = item
+            draw.text((cx - w / 2 - x0, y - y0), data,
+                      font=font, fill="#111111", anchor="la")
+            y += h
+        else:  # qr
+            _, data, _, qs, _, _, _, _ = item
+            qr_img = _make_qr_image(data, qs)
+            img.paste(qr_img, (int(cx - qs / 2), int(round(y))))
+            y += qs
+
+    return img
+
+
+def build_zpl_from_attendee(content: dict) -> str:
+    """Render the badge image server-side (matching make_label_image.py) and
+    convert it to a positioned ZPL ^GFA job placed below the 57 mm header."""
+    return _image_to_gfa(render_badge_print_area(content))
 
 
 def _image_to_gfa(image: Image.Image) -> str:
-    image = image.convert("L").resize((800, 1200), Image.NEAREST)
-    image = image.point(lambda px: 0 if px < 160 else 255, "1")
+    # Folding badge — printed one FRONT PANEL at a time.
+    # Each panel (gap/diecut to gap/diecut) is 101.6 mm x 152.4 mm.
+    # At 203 dpi: 812 x 1219 dots.
+    #
+    #   0 .. 57 mm   (0 .. 456 dots)   -> pre-printed green header (leave blank)
+    #   57 .. 152.4  (456 .. 1219)     -> WHITE rectangle = printable area
+    #                                     height 95.4 mm = 763 dots
+    LABEL_W       = 812    # 101.6 mm  (^PW)
+    LABEL_LEN     = 1219   # 152.4 mm  (^LL) — one front panel
+    HEADER_OFFSET = 456    #  57.0 mm  — first writable row (below header)
+    CONTENT_W     = 812    # 101.6 mm  — printable width
+    CONTENT_H     = LABEL_LEN - HEADER_OFFSET  # 763 dots = 95.4 mm printable height
+
+    # Fit the badge image INSIDE the 812 x 763 printable rectangle while
+    # preserving its aspect ratio, then center it on a white canvas of exactly
+    # that size. This prevents the vertical/horizontal stretching that a hard
+    # resize() caused (e.g. a squashed/elongated QR code).
+    src = image.convert("L")
+    fitted = src.copy()
+    fitted.thumbnail((CONTENT_W, CONTENT_H), Image.LANCZOS)  # scale-to-fit, no stretch
+    canvas = Image.new("L", (CONTENT_W, CONTENT_H), 255)     # white background
+    paste_x = (CONTENT_W - fitted.width) // 2
+    paste_y = (CONTENT_H - fitted.height) // 2
+    canvas.paste(fitted, (paste_x, paste_y))
+
+    image = canvas.point(lambda px: 0 if px < 160 else 255, "1")
     width, height = image.size
     width_bytes = (width + 7) // 8
     total_bytes = width_bytes * height
@@ -650,7 +1066,11 @@ def _image_to_gfa(image: Image.Image) -> str:
                     byte_val |= 0x80 >> bit
             row.append(f"{byte_val:02X}")
         hex_rows.append("".join(row))
-    return f"^XA^PON^PW800^LL1200^LH0,0^FO0,0^GFA,{total_bytes},{total_bytes},{width_bytes},{''.join(hex_rows)}^FS^PQ1^XZ"
+    return (
+        f"^XA^PON^PW{LABEL_W}^LL{LABEL_LEN}^LH0,0"
+        f"^FO0,{HEADER_OFFSET}^GFA,{total_bytes},{total_bytes},{width_bytes},{''.join(hex_rows)}^FS"
+        f"^PQ1^XZ"
+    )
 
 
 def build_zpl_from_badge_image(data_url: str) -> str:
@@ -792,6 +1212,7 @@ def print_badge():
         category = attendee.get('category', 'Delegate').upper()
         code = attendee.get('code', 'NO-CODE')
         company = attendee.get('company', 'N/A')
+        eventcat = attendee.get('eventcat', '') or ''
 
         print(f"Received print request for: {name}")
 
@@ -800,6 +1221,7 @@ def print_badge():
         category = category.encode('ascii', errors='ignore').decode('ascii')
         code     = code.encode('ascii', errors='ignore').decode('ascii')
         company  = company.encode('ascii', errors='ignore').decode('ascii')
+        eventcat = eventcat.encode('ascii', errors='ignore').decode('ascii')
 
         # Apply existing helpers (Req 3.7, 3.3, 3.4)
         name_line1 = derive_name_line1(name)
@@ -818,7 +1240,16 @@ def print_badge():
         # Build ZPL command (Req 1.7: any builder error -> HTTP 500)
         try:
             if print_mode == "image":
-                zpl = build_zpl_from_badge_image(data.get("badge_image", ""))
+                # Render the badge image server-side (faithful port of
+                # make_label_image.py) so the printout matches the reference
+                # sample exactly and does not depend on browser fonts/canvas.
+                zpl = build_zpl_from_attendee({
+                    "name":     name,
+                    "company":  company,
+                    "category": category,
+                    "qr_data":  code,
+                    "eventcat": eventcat,
+                })
             else:
                 zpl = build_zpl(prepared)
         except Exception as e:
@@ -844,22 +1275,61 @@ def print_badge():
 
 @app.route('/api/printers', methods=['GET'])
 def printers_list():
-    """Return configured printer labels for the browser UI."""
+    """List selectable Zebra printers for the browser dropdown.
+
+    Merges any labelled ``ZEBRA_PRINTERS`` config entries with every Zebra
+    queue currently installed in Windows, and reports each queue's online
+    state so the operator can avoid stale/offline duplicates. The returned
+    ``queue`` value can be sent straight back as ``printer_label`` to
+    ``/api/print`` (it direct-matches an installed queue name)."""
     if not _print_request_authorized():
         return jsonify({"success": False, "error": "Unauthorized request."}), 401
 
+    installed = _list_installed_printers()
+    installed_zebra = [p for p in installed if _is_zebra_printer_record(p)]
+    by_queue = {p["name"]: p for p in installed_zebra}
+
     printers = []
+    seen_queues = set()
+
+    # Configured printers first so their human-friendly labels take precedence.
     for item in ZEBRA_PRINTERS:
         if not isinstance(item, dict):
             continue
         label = str(item.get("label", "")).strip()
+        queue = str(item.get("queue", "")).strip()
         if not label:
             continue
+        match = by_queue.get(queue)
         printers.append({
             "label": label,
+            "queue": queue,
+            "installed": match is not None,
+            "online": bool(match.get("online")) if match else False,
+            "ready": bool(match.get("ready")) if match else False,
             "serial_set": bool(str(item.get("serial", "")).strip() and str(item.get("serial", "")).strip() != "AUTO_FILL_AFTER_SCAN"),
-            "queue_set": bool(str(item.get("queue", "")).strip()),
+            "queue_set": bool(queue),
+            "source": "configured",
         })
+        if queue:
+            seen_queues.add(queue)
+
+    # Then every installed Zebra queue not already covered by config.
+    for p in installed_zebra:
+        if p["name"] in seen_queues:
+            continue
+        printers.append({
+            "label": p["name"],
+            "queue": p["name"],
+            "installed": True,
+            "online": bool(p.get("online")),
+            "ready": bool(p.get("ready")),
+            "serial_set": False,
+            "queue_set": True,
+            "source": "detected",
+        })
+        seen_queues.add(p["name"])
+
     return jsonify({"success": True, "printers": printers})
 
 
@@ -977,7 +1447,10 @@ if __name__ == "__main__":
         NGROK_AUTHTOKEN = os.environ.get('NGROK_AUTHTOKEN')
         if NGROK_AUTHTOKEN:
             ngrok.set_auth_token(NGROK_AUTHTOKEN)
-        public_url = ngrok.connect(8080)
+        # Use the reserved/permanent domain from the ngrok account.
+        # Override with the NGROK_DOMAIN env var if needed.
+        NGROK_DOMAIN = os.environ.get('NGROK_DOMAIN', 'sijori.ngrok.dev')
+        public_url = ngrok.connect(8080, domain=NGROK_DOMAIN)
         print(f"\nPublic URL: {public_url}\n")
         app.run(host='0.0.0.0', port=8080, debug=False)
     except Exception as e:

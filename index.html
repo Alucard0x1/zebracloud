@@ -416,65 +416,44 @@
 
         const loadPrinters = async () => {
             try {
-                const response = await fetch(`${BACKEND_URL}/api/printers/debug`, { 
+                const response = await fetch(`${BACKEND_URL}/api/printers`, {
                     method: 'GET',
                     headers: { 'X-API-Key': 'test123' }
                 });
                 if (!response.ok) return;
                 const data = await response.json();
-                
-                // Store USB devices for matching
-                window.allUsbDevices = data.usb_devices || [];
-                
-                // Check for configured printers first
-                const configured = data.configured_zebra_printers || [];
-                const discoveredSerials = data.discovered_zebra_usb_serials || [];
-                const installedZebraQueues = data.zebra_queues || [];
-                
-                // Build map of serial -> queue for matching
-                const serialToQueue = {};
-                installedZebraQueues.forEach(q => {
-                    const serials = discoverSerialsFromQueue(q.name);
-                    serials.forEach(s => serialToQueue[s] = q.name);
-                });
-                
-                // Clear existing options
+                const printers = (data && data.printers) || [];
+
+                // Reset to just the auto-detect option, then add each Zebra queue.
                 printerSelect.innerHTML = '<option value="">Auto-detect Zebra USB printer</option>';
-                
-                // Add configured printers with labels
-                const addedLabels = new Set();
-                if (configured.length > 0) {
-                    configured.forEach((printer) => {
-                        if (typeof printer === 'object' && printer.label && printer.label.trim()) {
-                            const label = printer.label.trim();
-                            const value = printer.queue || printer.serial || label;
-                            const option = document.createElement('option');
-                            option.value = value;
-                            option.textContent = `${label}${printer.queue ? '' : ' (no queue)'}`;
-                            if (label === DEFAULT_PRINTER_LABEL) option.selected = true;
-                            printerSelect.appendChild(option);
-                            addedLabels.add(label);
-                        }
-                    });
-                }
-                
-                // Add discovered printers without configuration
-                if (discoveredSerials.length > 0 && addedLabels.size === 0) {
-                    discoveredSerials.forEach((serial, index) => {
-                        const queueName = serialToQueue[serial] || 'Auto-detected';
-                        const label = `Zebra Printer ${index + 1} (${serial.slice(-8)})`;
-                        const option = document.createElement('option');
-                        option.value = queueName;
-                        option.textContent = label;
-                        if (index === 0 && !printerSelect.querySelector('[selected]')) option.selected = true;
-                        printerSelect.appendChild(option);
-                    });
-                }
-                
+
+                const seenValues = new Set();
+                printers.forEach((printer) => {
+                    const label = String(printer.label || printer.queue || '').trim();
+                    const value = String(printer.queue || printer.label || '').trim();
+                    if (!label || !value || seenValues.has(value)) return;
+                    seenValues.add(value);
+
+                    let suffix = '';
+                    if (printer.installed === false) suffix = ' (not installed)';
+                    else if (printer.online === false) suffix = ' (offline)';
+                    else if (printer.ready === false) suffix = ' (not ready)';
+
+                    const option = document.createElement('option');
+                    option.value = value;
+                    option.textContent = `${label}${suffix}`;
+                    if (label === DEFAULT_PRINTER_LABEL || value === DEFAULT_PRINTER_LABEL) {
+                        option.selected = true;
+                    }
+                    printerSelect.appendChild(option);
+                });
+
                 selectedPrinterLabel = printerSelect.value;
                 if (printerSelect.options.length > 1) {
                     printerSelectArea.classList.remove('hidden');
-                    printerStatus.textContent = selectedPrinterLabel ? `Using ${selectedPrinterLabel}` : 'Using auto-detected Zebra USB printer.';
+                    printerStatus.textContent = selectedPrinterLabel
+                        ? `Using ${selectedPrinterLabel}`
+                        : 'Using auto-detected Zebra USB printer.';
                 }
             } catch (error) {
                 console.warn('Unable to load printer list.', error);
@@ -680,40 +659,78 @@
                 try { await document.fonts.ready; } catch (_) {}
             }
 
+            // Canvas matches the printable CONTENT AREA only (the white
+            // rectangle below the 57 mm pre-printed header on the badge front).
+            // 101.6 mm wide x 95.4 mm tall @ 203 dpi = 812 x 763 dots.
+            // The backend (_image_to_gfa) places this image at y=456 (57 mm)
+            // on a 152.4 mm panel, preserving its aspect ratio (no stretch).
+            const W = 812;
+            const H = 763;
             const canvas = document.createElement('canvas');
-            canvas.width = 800;
-            canvas.height = 1200;
+            canvas.width = W;
+            canvas.height = H;
             const ctx = canvas.getContext('2d');
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillRect(0, 0, W, H);
             ctx.fillStyle = '#000000';
             ctx.textBaseline = 'top';
+            ctx.textAlign = 'center';           // horizontally center every line
+            const cx = W / 2;                    // horizontal center
+            const maxTextW = W - 60;             // side margins for text
 
             const clean = {
                 name: sanitizeAscii(attendee.name),
                 company: sanitizeAscii(attendee.company),
                 category: sanitizeAscii(attendee.category || 'Delegate').toUpperCase(),
-                code: sanitizeAscii(attendee.code || 'NO-CODE')
+                code: sanitizeAscii(attendee.code || 'NO-CODE'),
+                eventcat: sanitizeAscii(attendee.eventcat || '').toUpperCase()
             };
             const nameLine1 = deriveNameLine1(clean.name);
             const [companyLine1, companyLine2] = splitCompanyLines(clean.company);
+            const hasEventcat = clean.eventcat && clean.eventcat !== 'N/A';
 
-            drawFittedText(ctx, clean.category, 50, 80, 700, 50, '400');
-            drawFittedText(ctx, nameLine1, 50, 200, 700, 110, '400');
-            drawFittedText(ctx, companyLine1, 50, 380, 700, 50, '400');
+            // Layout mimics the reference badge: content packed at the TOP of
+            // the white area (just below the header), centered, in this order:
+            //   Name (dominant, bold) -> Company -> Category (bold) -> QR
+            //   -> Event category.
+            const QR_SIZE = 300;                 // ~37 mm square graphic
+            let y = 50;                          // small gap below the header
+
+            // 1. Name — dominant, bold
+            drawFittedText(ctx, nameLine1, cx, y, maxTextW, 100, '700');
+            y += 100 + 12;
+
+            // 2. Company (1-2 lines)
+            drawFittedText(ctx, companyLine1, cx, y, maxTextW, 56, '500');
+            y += 56 + 6;
             if (companyLine2) {
-                drawFittedText(ctx, companyLine2, 50, 450, 700, 50, '400');
+                drawFittedText(ctx, companyLine2, cx, y, maxTextW, 56, '500');
+                y += 56 + 6;
             }
 
-            const qrCanvas = await createQrCanvas(clean.code, 400);
+            // 3. Category — bold small caps
+            drawFittedText(ctx, clean.category, cx, y, maxTextW, 40, '700');
+            y += 40 + 22;
+
+            // 4. QR code — centered
+            const qrCanvas = await createQrCanvas(clean.code, QR_SIZE);
             ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(qrCanvas, 200, 640, 400, 400);
+            ctx.drawImage(qrCanvas, (W - QR_SIZE) / 2, y, QR_SIZE, QR_SIZE);
+            y += QR_SIZE + 18;
+
+            // 5. Event category (e.g. "TECH SUMMIT 2026")
+            if (hasEventcat) {
+                drawFittedText(ctx, clean.eventcat, cx, y, maxTextW, 44, '400');
+            }
 
             return canvas.toDataURL('image/png');
         };
 
 
-        // Send print request to backend API as a full-size badge image.
+        // Send print request to backend API. The backend renders the badge
+        // image server-side (matching make_label_image.py) from the attendee
+        // fields, so no canvas image needs to be sent. eventcat is included
+        // via the spread below.
         const sendToPrinter = async (attendee) => {
             try {
                 // Sanitize attendee data to remove problematic characters before sending to backend.
@@ -723,9 +740,9 @@
                     jobTitle: String(attendee.jobTitle ?? '').replace(/[^\x00-\x7F]/g, ""),
                     category: String(attendee.category ?? '').replace(/[^\x00-\x7F]/g, ""),
                     company: String(attendee.company ?? '').replace(/[^\x00-\x7F]/g, ""),
-                    code: String(attendee.code ?? '').replace(/[^\x00-\x7F]/g, "")
+                    code: String(attendee.code ?? '').replace(/[^\x00-\x7F]/g, ""),
+                    eventcat: String(attendee.eventcat ?? '').replace(/[^\x00-\x7F]/g, "")
                 };
-                const badgeImage = await createBadgeImageDataUrl(sanitizedAttendee);
                 const response = await fetch(`${BACKEND_URL}/api/print`, {
                     method: 'POST',
                     headers: {
@@ -735,8 +752,7 @@
                     body: JSON.stringify({
                         print_mode: 'image',
                         printer_label: selectedPrinterLabel,
-                        attendee: sanitizedAttendee,
-                        badge_image: badgeImage
+                        attendee: sanitizedAttendee
                     })
                 });
 
