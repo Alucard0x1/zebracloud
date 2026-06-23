@@ -1067,7 +1067,7 @@ def _image_to_gfa(image: Image.Image) -> str:
             row.append(f"{byte_val:02X}")
         hex_rows.append("".join(row))
     return (
-        f"^XA^PON^PW{LABEL_W}^LL{LABEL_LEN}^LH0,0"
+        f"^XA^POI^PW{LABEL_W}^LL{LABEL_LEN}^LH0,0"
         f"^FO0,{HEADER_OFFSET}^GFA,{total_bytes},{total_bytes},{width_bytes},{''.join(hex_rows)}^FS"
         f"^PQ1^XZ"
     )
