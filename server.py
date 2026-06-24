@@ -105,6 +105,17 @@ app = Flask(__name__, static_folder='.')
 # was loaded over "https://<name>.ngrok-free.app".
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
+
+# Prevent browser caching of HTML/CSS/JS so deployments are picked up immediately.
+@app.after_request
+def add_no_cache_headers(response):
+    if response.content_type and ('text/html' in response.content_type or 'text/css' in response.content_type or 'javascript' in response.content_type):
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
+
+
 # Static file serving routes
 @app.route('/')
 def index():
