@@ -1024,10 +1024,10 @@
                     
                     // --- MODIFIED SECTION ---
                     // This is much more reliable on mobile devices like iPads.
-                    // It directly requests the 'environment' (back) camera
+                    // It directly requests the 'user' (front) camera
                     // instead of guessing based on camera labels.
                     await html5QrCode.start(
-                        { facingMode: "environment" }, // Request the back camera
+                        { facingMode: "user" }, // Request the front camera
                         config,
                         qrCodeSuccessCallback
                     );
