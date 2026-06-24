@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Self-Service Badge Printer</title>
-    <link rel="stylesheet" href="assets/tailwind.css?v=20260624b">
+    <link rel="stylesheet" href="assets/tailwind.css?v=20260624c">
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <link rel="stylesheet" href="fonts/poppins/poppins.css?v=20260624b">
@@ -100,14 +100,9 @@
             border-radius: 14px; border: none;
             cursor: pointer; transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
             display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-            position: relative; overflow: hidden;
+            position: relative;
         }
         .btn-touch:active { transform: scale(0.96); }
-        .btn-touch::after {
-            content: ''; position: absolute; inset: 0; border-radius: inherit;
-            background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
-            pointer-events: none;
-        }
         @media (min-width: 768px) { .btn-touch { min-height: 56px; padding: 16px 28px; font-size: 1.05rem; border-radius: 16px; } }
 
         .btn-primary { background: linear-gradient(135deg, #ffffff, #f0f4ff); color: #1d4ed8; box-shadow: 0 4px 16px rgba(0,0,0,0.1), 0 0 0 1px rgba(255,255,255,0.8) inset; }
@@ -331,7 +326,7 @@
                         </button>
                     </div>
                 </div>
-                <div id="qr-reader" class="w-full h-full"></div>
+                <div id="qr-reader"></div>
                 <div class="scanner-footer">
                     <p id="qr-status" class="text-white text-base md:text-lg font-medium">Point your camera at the QR code.</p>
                 </div>
