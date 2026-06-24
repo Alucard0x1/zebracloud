@@ -847,13 +847,33 @@
             dateEl.textContent = now.toLocaleDateString('en-US', dateOptions);
         };
 
+        // Clear the badge preview and attendee state so the next person in the
+        // queue never sees the badge that was just printed. Returns the screen
+        // to its initial "empty" state. Used after a successful print in both
+        // manual and QR modes.
+        const resetBadgePreview = () => {
+            currentAttendee = null;
+            badgePreviewContainer.innerHTML = '';
+            badgePrintContainer.innerHTML = '';
+            badgePreviewContainer.classList.add('hidden');
+            badgePreviewContainer.classList.remove('flex');
+            badgePlaceholder.classList.remove('hidden');
+            attendeeCodeInput.value = '';
+            errorMessage.textContent = '';
+            printBtn.disabled = true;
+            printBtn.classList.add('bg-slate-400', 'cursor-not-allowed');
+            printBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+        };
+
         const showScanSuccess = (attendee) => {
             scannedAttendeeName.textContent = attendee.name;
             scanSuccessNotification.classList.remove('hidden');
             
-            // Hide notification after 3 seconds to allow for quick scanning
+            // Hide the notification AND clear the badge preview after 3 seconds
+            // so the next person in the queue doesn't see the last printed badge.
             setTimeout(() => {
                 scanSuccessNotification.classList.add('hidden');
+                resetBadgePreview();
             }, 3000);
         };
 
@@ -1183,9 +1203,11 @@
                     scanSuccessNotification.classList.add('hidden');
                     setTimeout(() => {
                         printBtn.textContent = originalText;
-                        printBtn.disabled = false;
                         handlePrintProcessing = false;
-                    }, 200);
+                        // Clear the preview so the next person in the queue
+                        // doesn't see the badge that was just printed.
+                        resetBadgePreview();
+                    }, 1500);
                 } else {
                     throw new Error(result.error);
                 }
@@ -1234,6 +1256,8 @@
                     const result = await sendToPrinter(currentAttendee);
                     if (result.success) {
                         qrStatus.textContent = 'Badge printed! Ready to scan next QR code.';
+                        // Clear the preview so the next person doesn't see it.
+                        setTimeout(resetBadgePreview, 2000);
                     } else {
                         qrStatus.textContent = `Print failed: ${result.error}`;
                     }
