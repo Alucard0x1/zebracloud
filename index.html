@@ -2,332 +2,391 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Self-Service Badge Printer</title>
     <link rel="stylesheet" href="assets/tailwind.css">
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <link rel="stylesheet" href="fonts/poppins/poppins.css">
     <style>
-        /* Custom styles for the application and print layout */
-        body {
-            font-family: 'Poppins', sans-serif;
-        }
+        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+        body { font-family: 'Poppins', sans-serif; overflow: hidden; margin: 0; }
 
-        /* Print styles for badge printing */
+        /* Print styles */
         @media print {
-            /* Hide everything except the badge and its children */
-            body *:not(#badge-print):not(#badge-print *) {
-                visibility: hidden !important;
-            }
-
-            /* Position and display the badge for proper printing */
+            body *:not(#badge-print):not(#badge-print *) { visibility: hidden !important; }
             #badge-print {
-                display: block !important;
-                visibility: visible !important;
-                position: fixed !important;
-                top: 50% !important;
-                left: 50% !important;
+                display: block !important; visibility: visible !important;
+                position: fixed !important; top: 50% !important; left: 50% !important;
                 transform: translate(-50%, -50%) rotate(180deg) !important;
-                width: 90mm !important;
-                height: 120mm !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                box-shadow: none !important;
-                border: none !important;
-                background: white !important;
-                overflow: hidden !important;
-                page-break-after: avoid !important;
-                page-break-before: avoid !important;
-                page-break-inside: avoid !important;
+                width: 90mm !important; height: 120mm !important;
+                margin: 0 !important; padding: 0 !important;
+                box-shadow: none !important; border: none !important;
+                background: white !important; overflow: hidden !important;
             }
-
-            /* Ensure all badge elements are visible with proper colors */
-            #badge-print * {
-                visibility: visible !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-            }
-
-            /* Ensure content stays within badge boundaries */
-            .print-badge-content {
-                page-break-inside: avoid !important;
-                position: relative !important;
-                width: 90mm !important;
-                height: 120mm !important;
-            }
-
-            /* Reset body for print */
-            html, body {
-                width: 100% !important;
-                height: 100% !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                background: white !important;
-                overflow: hidden !important;
-            }
+            #badge-print * { visibility: visible !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .print-badge-content { page-break-inside: avoid !important; position: relative !important; width: 90mm !important; height: 120mm !important; }
+            html, body { width: 100% !important; height: 100% !important; margin: 0 !important; padding: 0 !important; background: white !important; overflow: hidden !important; }
         }
+        @page { size: 90mm 120mm; margin: 0; padding: 0; }
 
-        /* Page setup for badge size */
-        @page {
-            size: 90mm 120mm;
-            margin: 0;
-            padding: 0;
-        }
-        
-        /* Mobile-specific print styles for Android devices */
-        @media print and (max-width: 767px) {
-            body {
-                font-size: 12px !important;
-                line-height: 1.2 !important;
-            }
+        /* Category colors */
+        .category-Delegate { background-color: #3b82f6; color: white; }
+        .category-VIP { background-color: #ca8a04; color: white; }
+        .category-Sponsor { background-color: #16a34a; color: white; }
 
-            #badge-print {
-                width: 85mm !important;
-                height: 115mm !important;
-                transform: translate(-50%, -50%) rotate(180deg) !important;
-            }
-
-            .print-badge-content {
-                width: 85mm !important;
-                height: 115mm !important;
-            }
-
-            .category-header {
-                font-size: 12pt !important;
-                padding: 6px 0 !important;
-            }
-
-            .name-section h2 {
-                font-size: 20pt !important;
-            }
-
-            .job-title-section p {
-                font-size: 12pt !important;
-            }
-
-            .code-section {
-                font-size: 10pt !important;
-            }
-
-            .badge-footer {
-                font-size: 8pt !important;
-            }
-        }
-        
-        /* Custom badge category colors */
-        .category-Delegate { background-color: #3b82f6; color: white; } /* Blue */
-        .category-VIP { background-color: #ca8a04; color: white; } /* Yellow-Gold */
-        .category-Sponsor { background-color: #16a34a; color: white; } /* Green */
-        
-        
-        /* CSS filter to make the blue logo appear white */
         .logo-white { filter: brightness(0) invert(1); }
 
-        /* QR Reader styling */
-        #qr-reader {
-            width: 100%;
-            height: 100%;
-            border: none;
+        /* Main layout */
+        .app-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            height: 100dvh;
+            width: 100vw;
             overflow: hidden;
         }
-        
-        #qr-reader video {
-            width: 100% !important;
-            height: 100% !important;
-            object-fit: cover;
+        @media (max-width: 767px) {
+            .app-container { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+            .preview-panel { display: none; }
+            .preview-panel.has-badge { display: flex; position: fixed; inset: 0; z-index: 40; background: rgba(15,23,42,0.9); backdrop-filter: blur(8px); }
         }
-        
-        /* Full height scanner container - only in left column */
-        .left-column-container {
+        @media (min-width: 768px) and (max-width: 1024px) {
+            .app-container { grid-template-columns: 1.15fr 0.85fr; }
+        }
+
+        /* Left panel — deep blue with animated gradient orbs */
+        .control-panel {
+            background: #0f1b3d;
+            display: flex; flex-direction: column; position: relative; overflow: hidden;
+        }
+        .control-panel::before {
+            content: ''; position: absolute; top: -20%; left: -20%; width: 70%; height: 70%;
+            background: radial-gradient(circle, rgba(59,130,246,0.3) 0%, transparent 70%);
+            animation: floatOrb1 12s ease-in-out infinite;
+            pointer-events: none;
+        }
+        .control-panel::after {
+            content: ''; position: absolute; bottom: -30%; right: -20%; width: 80%; height: 80%;
+            background: radial-gradient(circle, rgba(99,102,241,0.2) 0%, transparent 70%);
+            animation: floatOrb2 15s ease-in-out infinite;
+            pointer-events: none;
+        }
+        @keyframes floatOrb1 { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(10%, 15%) scale(1.1); } }
+        @keyframes floatOrb2 { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-8%, -10%) scale(1.05); } }
+
+        /* Preview panel */
+        .preview-panel {
+            background: linear-gradient(180deg, #f0f4ff 0%, #e8edf5 100%);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
             position: relative;
         }
-        
-        #qr-scanner-area.full-height {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            width: 100%;
-            height: 100%;
-            background: #1e40af;
-            display: flex;
-            flex-direction: column;
-            padding: 0;
-            z-index: 50;
+
+        /* Glass card container for controls */
+        .glass-card {
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px; padding: 24px;
+            backdrop-filter: blur(12px);
         }
-        
-        /* Success notification styling */
+        @media (min-width: 768px) { .glass-card { padding: 28px; border-radius: 24px; } }
+
+        /* Tablet-optimized touch targets */
+        .btn-touch {
+            min-height: 52px; padding: 14px 24px;
+            font-size: 1rem; font-weight: 600;
+            border-radius: 14px; border: none;
+            cursor: pointer; transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            position: relative; overflow: hidden;
+        }
+        .btn-touch:active { transform: scale(0.96); }
+        .btn-touch::after {
+            content: ''; position: absolute; inset: 0; border-radius: inherit;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
+            pointer-events: none;
+        }
+        @media (min-width: 768px) { .btn-touch { min-height: 56px; padding: 16px 28px; font-size: 1.05rem; border-radius: 16px; } }
+
+        .btn-primary { background: linear-gradient(135deg, #ffffff, #f0f4ff); color: #1d4ed8; box-shadow: 0 4px 16px rgba(0,0,0,0.1), 0 0 0 1px rgba(255,255,255,0.8) inset; }
+        .btn-primary:hover { background: linear-gradient(135deg, #f0f4ff, #dbeafe); box-shadow: 0 6px 20px rgba(29,78,216,0.15), 0 0 0 1px rgba(255,255,255,0.8) inset; transform: translateY(-1px); }
+        .btn-success { background: linear-gradient(135deg, #16a34a, #15803d); color: white; box-shadow: 0 4px 16px rgba(22,163,74,0.35); }
+        .btn-success:hover { background: linear-gradient(135deg, #22c55e, #16a34a); box-shadow: 0 6px 24px rgba(22,163,74,0.4); transform: translateY(-1px); }
+        .btn-disabled { background: rgba(148,163,184,0.4); color: rgba(255,255,255,0.7); cursor: not-allowed; opacity: 0.8; box-shadow: none; }
+        .btn-scanner { background: rgba(255,255,255,0.1); color: white; backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.15); }
+        .btn-scanner:hover { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.3); }
+        .btn-scanner-green { background: linear-gradient(135deg, rgba(22,163,74,0.9), rgba(21,128,61,0.9)); color: white; border: 1px solid rgba(74,222,128,0.3); box-shadow: 0 4px 12px rgba(22,163,74,0.3); }
+        .btn-scanner-green:hover { background: linear-gradient(135deg, rgba(34,197,94,0.95), rgba(22,163,74,0.95)); }
+
+        /* Mode toggle */
+        .mode-toggle {
+            background: rgba(0,0,0,0.25); border-radius: 14px; padding: 5px;
+            display: flex; gap: 4px; border: 1px solid rgba(255,255,255,0.06);
+        }
+        .mode-toggle button {
+            flex: 1; padding: 13px 16px; border-radius: 11px; border: none;
+            font-weight: 600; font-size: 0.95rem; cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4,0,0.2,1); color: rgba(255,255,255,0.5);
+            background: transparent;
+        }
+        .mode-toggle button.active {
+            background: linear-gradient(135deg, rgba(59,130,246,0.6), rgba(99,102,241,0.4));
+            color: white; box-shadow: 0 4px 12px rgba(59,130,246,0.25);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .mode-toggle button:not(.active):hover { color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.05); }
+        @media (min-width: 768px) { .mode-toggle button { padding: 15px 20px; font-size: 1rem; } }
+
+        /* Input styling */
+        .input-ticket {
+            width: 100%; padding: 16px 20px;
+            font-size: 1.1rem; border-radius: 14px;
+            border: 2px solid rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.08); color: #ffffff;
+            transition: all 0.25s ease; outline: none;
+            backdrop-filter: blur(8px);
+        }
+        .input-ticket:focus { border-color: rgba(96,165,250,0.6); box-shadow: 0 0 0 4px rgba(96,165,250,0.15), 0 4px 16px rgba(59,130,246,0.1); background: rgba(255,255,255,0.12); }
+        .input-ticket::placeholder { color: rgba(255,255,255,0.4); }
+        @media (min-width: 768px) { .input-ticket { padding: 18px 24px; font-size: 1.15rem; border-radius: 16px; } }
+
+        /* QR Scanner */
+        #qr-reader { width: 100%; height: 100%; border: none; overflow: hidden; }
+        #qr-reader video { width: 100% !important; height: 100% !important; object-fit: cover; }
+
+        .scanner-overlay {
+            position: absolute; inset: 0; z-index: 50;
+            background: #0a0f1e; display: flex; flex-direction: column;
+        }
+        .scanner-header {
+            position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+            padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 70%, transparent 100%);
+        }
+        .scanner-footer {
+            position: absolute; bottom: 0; left: 0; right: 0; z-index: 10;
+            padding: 24px; text-align: center;
+            background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 70%, transparent 100%);
+        }
+        @media (min-width: 768px) {
+            .scanner-header { padding: 24px 28px; }
+            .scanner-footer { padding: 28px; }
+        }
+
+        /* Success notification */
         .scan-success-notification {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            padding: 2rem;
-            border-radius: 1rem;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            z-index: 100;
-            text-align: center;
-            max-width: 400px;
-            animation: fadeInScale 0.3s ease-out;
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(255,255,255,0.97); padding: 2rem; border-radius: 1.5rem;
+            box-shadow: 0 25px 60px -12px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,0,0,0.05);
+            z-index: 100; text-align: center; max-width: 380px; width: calc(100% - 3rem);
+            animation: fadeInScale 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            backdrop-filter: blur(20px);
         }
-        
         @keyframes fadeInScale {
-            from {
-                opacity: 0;
-                transform: translate(-50%, -50%) scale(0.9);
-            }
-            to {
-                opacity: 1;
-                transform: translate(-50%, -50%) scale(1);
-            }
+            from { opacity: 0; transform: translate(-50%, -50%) scale(0.85); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         }
+
+        /* Badge preview card */
+        .badge-card {
+            width: min(400px, calc(100vw - 3rem)); aspect-ratio: 7/10;
+            border-radius: 20px; overflow: hidden;
+            box-shadow: 0 25px 80px -12px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.04);
+            transition: all 0.4s cubic-bezier(0.4,0,0.2,1);
+        }
+        .badge-card:hover { box-shadow: 0 30px 90px -12px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.06); transform: translateY(-2px); }
+        @media (min-width: 768px) { .badge-card { width: min(440px, calc(100% - 4rem)); border-radius: 24px; } }
+        @media (min-width: 1024px) { .badge-card { width: min(480px, calc(100% - 5rem)); } }
+
+        .badge-placeholder {
+            width: 100%; height: 100%; border-radius: 20px;
+            border: 2px dashed rgba(148,163,184,0.4);
+            background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            text-align: center; padding: 2rem; color: #64748b;
+        }
+        @media (min-width: 768px) { .badge-placeholder { border-radius: 24px; } }
+
+        /* Status bar */
+        .status-bar {
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px 18px; border-radius: 14px;
+            background: rgba(255,255,255,0.05); margin-top: auto;
+            font-size: 0.85rem; color: rgba(255,255,255,0.7);
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; flex-shrink: 0; box-shadow: 0 0 8px rgba(74,222,128,0.5); animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(74,222,128,0.5); } 50% { opacity: 0.6; box-shadow: 0 0 4px rgba(74,222,128,0.3); } }
+
+        /* Scrollbar hidden */
+        .scroll-hide::-webkit-scrollbar { display: none; }
+        .scroll-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Subtle floating particles */
+        .particle {
+            position: absolute; border-radius: 50%; pointer-events: none; opacity: 0.15;
+            background: rgba(147,197,253,0.5);
+        }
+        .particle-1 { width: 6px; height: 6px; top: 20%; left: 80%; animation: float1 8s ease-in-out infinite; }
+        .particle-2 { width: 4px; height: 4px; top: 60%; left: 15%; animation: float2 10s ease-in-out infinite; }
+        .particle-3 { width: 8px; height: 8px; top: 80%; left: 70%; animation: float3 12s ease-in-out infinite; }
+        .particle-4 { width: 5px; height: 5px; top: 35%; left: 50%; animation: float1 9s ease-in-out infinite reverse; }
+        @keyframes float1 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-15px, -20px); } }
+        @keyframes float2 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(20px, -15px); } }
+        @keyframes float3 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-10px, 15px); } }
     </style>
 </head>
-<body class="bg-slate-100">
+<body>
 
-    <div class="flex flex-col lg:flex-row min-h-screen">
-        <div class="w-full lg:w-1/2 bg-blue-700 p-6 md:p-8 flex flex-col justify-center left-column-container">
-            <div class="max-w-md mx-auto w-full">
-                <div class="text-center mb-8">
-                    <img src="https://w.media/wp-content/uploads/2025/02/wmedialogo-02-scaled.png" alt="Logo" class="logo-white mx-auto mb-6 h-12" onerror="this.style.display='none'">
-                    
-                    <p class="text-2xl text-blue-100 mt-1">Self Checkin & Print Badge</p>
-                    <p class="text-blue-200 mt-4">Enter your ID Ticket or scan QR to preview and print your badge.</p>
+    <!-- Main Layout -->
+    <div class="app-container">
+        <!-- Left: Control Panel -->
+        <div class="control-panel" id="control-panel">
+            <!-- Floating particles -->
+            <div class="particle particle-1"></div>
+            <div class="particle particle-2"></div>
+            <div class="particle particle-3"></div>
+            <div class="particle particle-4"></div>
+
+            <div class="flex flex-col h-full p-5 md:p-8 lg:p-10 relative z-10 scroll-hide overflow-y-auto">
+                <!-- Header -->
+                <div class="text-center mb-5 md:mb-7">
+                    <img src="https://w.media/wp-content/uploads/2025/02/wmedialogo-02-scaled.png" alt="Logo" class="logo-white mx-auto mb-3 h-9 md:h-11" onerror="this.style.display='none'">
+                    <h1 class="text-xl md:text-2xl font-bold text-white tracking-tight">Self Checkin & Print Badge</h1>
+                    <p class="text-blue-300/70 mt-2 text-sm md:text-base font-light">Enter your ID Ticket or scan QR to print your badge.</p>
                 </div>
 
-                <div class="bg-blue-800 p-1 rounded-lg flex justify-center gap-2 mb-4">
-                    <button id="mode-input-btn" class="w-full py-2 px-4 rounded-md text-white bg-blue-600 font-semibold">Manual Input</button>
-                    <button id="mode-scan-btn" class="w-full py-2 px-4 rounded-md text-blue-200 hover:bg-blue-600 hover:text-white font-semibold">Scan QR</button>
+                <!-- Glass Card with controls -->
+                <div class="glass-card flex flex-col gap-4 md:gap-5">
+                    <!-- Mode Toggle -->
+                    <div class="mode-toggle">
+                        <button id="mode-input-btn" class="active">Manual Input</button>
+                        <button id="mode-scan-btn">Scan QR</button>
+                    </div>
+
+                    <!-- Input Area -->
+                    <div id="input-area" class="flex flex-col gap-4">
+                        <input type="text" id="attendee-code" placeholder="Enter your ID Ticket..." class="input-ticket">
+                        <div class="grid grid-cols-2 gap-3">
+                            <button id="preview-btn" class="btn-touch btn-primary">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                Preview
+                            </button>
+                            <button id="print-btn" disabled class="btn-touch btn-disabled">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                                Print
+                            </button>
+                        </div>
+                        <div id="printer-select-area" class="hidden">
+                            <label for="printer-select" class="block text-xs font-semibold text-blue-200/80 mb-2 uppercase tracking-wide">Printer</label>
+                            <select id="printer-select" class="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/10 text-white focus:ring-2 focus:ring-blue-400/50 text-base backdrop-blur-sm">
+                                <option value="">Auto-detect Zebra USB printer</option>
+                            </select>
+                            <p id="printer-status" class="text-xs text-blue-300/60 mt-2"></p>
+                        </div>
+                    </div>
+
+                    <!-- Error message -->
+                    <div id="error-message" class="text-center text-amber-300 font-medium min-h-[1.25rem] text-sm"></div>
                 </div>
 
-                <div id="input-area">
-                    <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-4">
-                        <input type="text" id="attendee-code" placeholder="Enter your ID Ticket..." class="w-full text-lg px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-50 transition duration-150 ease-in-out">
-                    </div>
-                     <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
-                         <button id="preview-btn" class="w-full sm:w-1/2 bg-white text-blue-700 font-semibold px-6 py-3 rounded-lg hover:bg-blue-100 transition duration-150 ease-in-out shadow-sm">
-                             Preview Badge
-                         </button>
-                         <button id="print-btn" disabled class="w-full sm:w-1/2 bg-slate-400 text-white font-semibold px-6 py-3 rounded-lg transition duration-150 ease-in-out cursor-not-allowed shadow-sm">
-                             Print
-                         </button>
-                     </div>
-                    <div id="printer-select-area" class="hidden mb-6">
-                        <label for="printer-select" class="block text-sm font-semibold text-blue-100 mb-2">Printer</label>
-                        <select id="printer-select" class="w-full px-4 py-3 rounded-lg border border-blue-300 bg-white text-slate-800 focus:ring-2 focus:ring-blue-500">
-                            <option value="">Auto-detect Zebra USB printer</option>
-                        </select>
-                        <p id="printer-status" class="text-xs text-blue-200 mt-2"></p>
-                    </div>
-                </div>
-
-                <div id="error-message" class="text-center text-yellow-300 font-medium mb-6 h-6"></div>
-
-                <div class="mt-8 pt-8 border-t border-blue-600 text-center text-blue-200">
-                    <div class="mb-4">
-                        <p class="font-semibold text-white text-lg" id="current-time"></p>
-                        <p class="text-sm" id="current-date"></p>
-                    </div>
-                    <div>
-                        <p class="font-semibold text-white">Need Help?</p>
-                        <p>Visit the Help Desk at the main entrance.</p>
+                <!-- Status Bar -->
+                <div class="status-bar mt-5 md:mt-7">
+                    <div class="status-dot"></div>
+                    <div class="flex-1 flex items-center gap-0">
+                        <span id="current-time" class="font-semibold text-white/90 text-sm"></span>
+                        <span class="mx-2 opacity-30">|</span>
+                        <span id="current-date" class="opacity-60 text-sm"></span>
                     </div>
                 </div>
             </div>
-            
-            <div id="qr-scanner-area" class="hidden full-height">
-                <div class="absolute top-0 left-0 right-0 flex items-center justify-between p-4 z-10">
-                    <h2 class="text-2xl font-bold text-white">Scan QR Code</h2>
-                    <div class="flex items-center gap-2">
-                        <button id="switch-camera-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-semibold">
-                            Switch Camera
+
+            <!-- QR Scanner Overlay -->
+            <div id="qr-scanner-area" class="hidden scanner-overlay">
+                <div class="scanner-header">
+                    <h2 class="text-lg md:text-xl font-bold text-white">Scan QR Code</h2>
+                    <div class="flex items-center gap-2 flex-wrap justify-end">
+                        <button id="print-from-qr-btn" class="btn-touch btn-scanner-green hidden" style="min-height:44px; padding:10px 16px; font-size:0.9rem;">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                            Reprint
                         </button>
-                        <button id="close-scanner-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-semibold">
-                            Switch Manual
+                        <button id="switch-camera-btn" class="btn-touch btn-scanner" style="min-height:44px; padding:10px 16px; font-size:0.9rem;">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            Camera
+                        </button>
+                        <button id="close-scanner-btn" class="btn-touch btn-scanner" style="min-height:44px; padding:10px 16px; font-size:0.9rem;">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                            Manual
                         </button>
                     </div>
                 </div>
-                <div class="w-full h-full flex flex-col">
-                    <div id="qr-reader" class="w-full h-full"></div>
-                    
-                    
-                    <p id="qr-status" class="absolute bottom-4 left-0 right-0 text-center text-blue-200 text-lg z-10">Point your camera at the QR code.</p>
+                <div id="qr-reader" class="w-full h-full"></div>
+                <div class="scanner-footer">
+                    <p id="qr-status" class="text-white text-base md:text-lg font-medium">Point your camera at the QR code.</p>
                 </div>
-                
+
+                <!-- Success notification -->
                 <div id="scan-success-notification" class="scan-success-notification hidden">
-                    <div class="mb-4">
-                        <svg class="w-16 h-16 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
+                    <div class="mb-3">
+                        <svg class="w-14 h-14 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     </div>
-                    <h3 class="text-xl font-bold text-slate-800 mb-2">QR Code Scanned!</h3>
-                    <p class="text-slate-600 mb-4">Attendee: <span id="scanned-attendee-name" class="font-semibold"></span></p>
+                    <h3 class="text-lg font-bold text-slate-800 mb-1">Badge Printed!</h3>
+                    <p class="text-slate-600 mb-3">Attendee: <span id="scanned-attendee-name" class="font-semibold"></span></p>
                     <div class="flex gap-3 justify-center">
-                        <button id="print-now-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">Print Now</button>
+                        <button id="print-now-btn" class="btn-touch btn-success" style="min-height:44px; padding:10px 20px;">Print Again</button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="w-full lg:w-1/2 bg-slate-50 flex flex-col">
-            <div id="scan-mode-header" class="hidden bg-blue-700 p-6 text-center">
-                <img src="https://w.media/wp-content/uploads/2025/02/wmedialogo-02-scaled.png" alt="Logo" class="logo-white mx-auto mb-4 h-10" onerror="this.style.display='none'">
-                <p class="text-xl text-blue-100 mt-1">Self Checkin & Print Badge</p>
-                <p class="text-blue-200 mt-3 text-sm">Scan QR for auto print your badge.</p>
+        <!-- Right: Preview Panel -->
+        <div class="preview-panel" id="preview-panel">
+            <div id="scan-mode-header" class="hidden absolute top-0 left-0 right-0 p-5 text-center z-10" style="background: linear-gradient(135deg, rgba(15,27,61,0.95), rgba(29,78,216,0.9)); backdrop-filter: blur(12px);">
+                <p class="text-lg text-white font-semibold">Auto Print Mode</p>
+                <p class="text-blue-200/70 text-sm mt-1">Scan QR to auto print badge.</p>
             </div>
-            
-            <div id="preview-section" class="w-full flex-grow flex items-center justify-center p-4 md:p-6">
-                <div class="flex justify-center">
-                    <div id="badge-container" class="w-[min(560px,calc(100vw-2rem))] aspect-[7/10] max-h-[calc(100vh-3rem)]">
-                        <div id="badge-placeholder" class="w-full h-full bg-slate-200 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-center text-slate-500 p-4">
-                             <svg class="w-16 h-16 text-slate-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 012-2h4a2 2 0 012 2v1m-4 0h4m-9 11V10l3 3m-3-3l3-3"></path></svg>
-                            <h3 class="font-semibold text-lg">Badge Preview</h3>
-                            <p class="text-sm">Your badge will appear here after you enter a valid code.</p>
+
+            <div id="preview-section" class="flex items-center justify-center p-4 md:p-6 w-full h-full">
+                <div class="badge-card" id="badge-container">
+                    <div id="badge-placeholder" class="badge-placeholder">
+                        <div style="width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,#e2e8f0,#cbd5e1);display:flex;align-items:center;justify-content:center;margin-bottom:1rem;">
+                            <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 012-2h4a2 2 0 012 2v1m-4 0h4m-9 11V10l3 3m-3-3l3-3"/></svg>
                         </div>
-                        <div id="badge-preview" class="w-full h-full bg-white rounded-xl shadow-2xl flex-col border border-slate-200 hidden">
-                            </div>
+                        <h3 class="font-semibold text-lg text-slate-500">Badge Preview</h3>
+                        <p class="text-sm text-slate-400 mt-1">Your badge will appear here after entering a valid code.</p>
                     </div>
+                    <div id="badge-preview" class="w-full h-full bg-white rounded-2xl flex-col hidden"></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="badge-print" class="hidden" style="position: absolute; left: -9999px; top: -9999px; background: white;"></div>
-    
-    <div id="debug-badge" style="position: fixed; top: 10px; right: 10px; width: 200px; height: 300px; background: white; border: 2px solid red; z-index: 10000; display: none;"></div>
-    
-    <div id="android-print-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="bg-white rounded-xl p-6 max-w-md mx-4 shadow-2xl">
+    <!-- Hidden print container -->
+    <div id="badge-print" class="hidden" style="position:absolute;left:-9999px;top:-9999px;background:white;"></div>
+    <div id="debug-badge" style="position:fixed;top:10px;right:10px;width:200px;height:300px;background:white;border:2px solid red;z-index:10000;display:none;"></div>
+
+    <!-- Android Print Modal -->
+    <div id="android-print-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden backdrop-blur-sm">
+        <div class="bg-white rounded-2xl p-6 max-w-md mx-4 shadow-2xl">
             <div class="text-center mb-4">
-                <svg class="w-16 h-16 text-blue-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
-                </svg>
-                <h3 class="text-xl font-bold text-slate-800 mb-2">Android Printing Instructions</h3>
+                <svg class="w-14 h-14 text-blue-600 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                <h3 class="text-xl font-bold text-slate-800">Android Printing</h3>
             </div>
-            <div class="text-left text-slate-600 space-y-3 mb-6">
-                <p class="font-semibold">To print your badge on Android:</p>
-                <ol class="list-decimal list-inside space-y-2 text-sm">
-                    <li>The print dialog should open automatically</li>
-                    <li>If not, tap the <strong>three-dot menu (⋮)</strong> in your browser</li>
-                    <li>Select <strong>"Print"</strong> from the menu</li>
-                    <li>Choose your printer or save as PDF</li>
-                    <li>Adjust settings if needed and tap <strong>"Print"</strong></li>
+            <div class="text-left text-slate-600 space-y-2 mb-5 text-sm">
+                <ol class="list-decimal list-inside space-y-1.5">
+                    <li>Print dialog should open automatically</li>
+                    <li>If not, tap <strong>three-dot menu</strong> in browser</li>
+                    <li>Select <strong>"Print"</strong></li>
+                    <li>Choose your printer and tap <strong>"Print"</strong></li>
                 </ol>
-                <p class="text-xs text-slate-500 mt-3">Tip: Make sure the USB printer is connected to this server computer.</p>
             </div>
             <div class="flex gap-3">
-                <button id="android-modal-close" class="flex-1 bg-slate-200 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-300 transition">Got it</button>
-                <button id="android-modal-print" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">Try Print Again</button>
+                <button id="android-modal-close" class="btn-touch flex-1" style="background:#f1f5f9;color:#475569;">Got it</button>
+                <button id="android-modal-print" class="btn-touch btn-primary flex-1">Try Again</button>
             </div>
         </div>
     </div>
 
     <script>
-        // Backend API Configuration - the backend sends RAW ZPL directly to the printer.
-        // Auto-detect backend URL from the page origin so clients can reach this server.
         const BACKEND_URL = window.location.origin;
         const DEFAULT_PRINTER_LABEL = new URLSearchParams(window.location.search).get('printer') || '';
 
@@ -351,23 +410,21 @@
         const scanSuccessNotification = document.getElementById('scan-success-notification');
         const scannedAttendeeName = document.getElementById('scanned-attendee-name');
         const printNowBtn = document.getElementById('print-now-btn');
+        const printFromQrBtn = document.getElementById('print-from-qr-btn');
         const scanModeHeader = document.getElementById('scan-mode-header');
         const printerSelectArea = document.getElementById('printer-select-area');
         const printerSelect = document.getElementById('printer-select');
         const printerStatus = document.getElementById('printer-status');
+        const previewPanel = document.getElementById('preview-panel');
 
         let currentAttendee = null;
-        let currentFacingMode = 'user'; // 'user' = front camera, 'environment' = back camera
+        let currentFacingMode = 'environment';
         let html5QrCode = null;
         let selectedPrinterLabel = DEFAULT_PRINTER_LABEL;
         window.allUsbDevices = [];
 
         const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#39;'
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
         }[char]));
 
         const safeDomId = (value) => String(value ?? '').replace(/[^A-Za-z0-9_-]/g, '_') || 'empty';
@@ -380,38 +437,29 @@
         const deriveNameLine1 = (name) => {
             const parts = String(name ?? '').split(/\s+/).filter(Boolean);
             if (parts.length === 0) return String(name ?? '');
-
             if (parts[0].endsWith('.')) {
                 if (parts.length === 1) return parts[0];
                 let line = `${parts[0]} ${parts[1]}`;
                 if (parts.length > 2) {
                     const combined = `${parts[0]} ${parts[1]} ${parts[2]}`;
-                    if (`${parts[0]} ${parts[1]}`.length < 6 && combined.length <= 25) {
-                        line = combined;
-                    }
+                    if (`${parts[0]} ${parts[1]}`.length < 6 && combined.length <= 25) { line = combined; }
                 }
                 return line;
             }
-
             if (parts.length === 1) return parts[0];
             if (parts.length === 2) return `${parts[0]} ${parts[1]}`;
-
             if (parts[1].length === 1) return parts[0];
             let line = `${parts[0]} ${parts[1]}`;
             const combined = `${parts[0]} ${parts[1]} ${parts[2]}`;
-            if (line.length < 8 && combined.length <= 25) {
-                line = combined;
-            }
+            if (line.length < 8 && combined.length <= 25) { line = combined; }
             return line;
         };
 
         const splitCompanyLines = (company) => {
             const value = String(company ?? '');
             if (value.length <= 20) return [value, ''];
-
             const match = value.match(/^(.{0,20})\s+(.*)/);
             if (match) return [match[1].trim(), match[2].trim()];
-
             const spaceAfter15 = value.indexOf(' ', 15);
             if (spaceAfter15 !== -1 && spaceAfter15 <= 25) {
                 return [value.slice(0, spaceAfter15).trim(), value.slice(spaceAfter15 + 1).trim()];
@@ -423,89 +471,56 @@
 
         const loadPrinters = async () => {
             try {
-                const response = await fetch(`${BACKEND_URL}/api/printers`, {
-                    method: 'GET',
-                    headers: { 'X-API-Key': 'test123' }
-                });
+                const response = await fetch(`${BACKEND_URL}/api/printers`, { method: 'GET', headers: { 'X-API-Key': 'test123' } });
                 if (!response.ok) return;
                 const data = await response.json();
                 const printers = (data && data.printers) || [];
-
-                // Reset to just the auto-detect option, then add each Zebra queue.
                 printerSelect.innerHTML = '<option value="">Auto-detect Zebra USB printer</option>';
-
                 const seenValues = new Set();
                 printers.forEach((printer) => {
                     const label = String(printer.label || printer.queue || '').trim();
                     const value = String(printer.queue || printer.label || '').trim();
                     if (!label || !value || seenValues.has(value)) return;
                     seenValues.add(value);
-
                     let suffix = '';
                     if (printer.installed === false) suffix = ' (not installed)';
                     else if (printer.online === false) suffix = ' (offline)';
                     else if (printer.ready === false) suffix = ' (not ready)';
-
                     const option = document.createElement('option');
                     option.value = value;
                     option.textContent = `${label}${suffix}`;
-                    if (label === DEFAULT_PRINTER_LABEL || value === DEFAULT_PRINTER_LABEL) {
-                        option.selected = true;
-                    }
+                    if (label === DEFAULT_PRINTER_LABEL || value === DEFAULT_PRINTER_LABEL) option.selected = true;
                     printerSelect.appendChild(option);
                 });
-
                 selectedPrinterLabel = printerSelect.value;
                 if (printerSelect.options.length > 1) {
                     printerSelectArea.classList.remove('hidden');
-                    printerStatus.textContent = selectedPrinterLabel
-                        ? `Using ${selectedPrinterLabel}`
-                        : 'Using auto-detected Zebra USB printer.';
+                    printerStatus.textContent = selectedPrinterLabel ? `Using ${selectedPrinterLabel}` : 'Using auto-detected Zebra USB printer.';
                 }
-            } catch (error) {
-                console.warn('Unable to load printer list.', error);
-            }
+            } catch (error) { console.warn('Unable to load printer list.', error); }
         };
-        
-        // Helper to extract serials from printer queue info
+
         const discoverSerialsFromQueue = (queueName) => {
             const serials = [];
             window.allUsbDevices.forEach(device => {
                 const text = `${device.name} ${device.pnp_id}`.toLowerCase();
                 const queueLower = queueName.toLowerCase();
-                if (text.includes(queueLower) || queueLower.includes(text)) {
-                    if (device.serial) serials.push(device.serial);
-                }
+                if (text.includes(queueLower) || queueLower.includes(text)) { if (device.serial) serials.push(device.serial); }
             });
             return serials;
         };
 
-        // Function to fetch attendee data from external API
         const fetchAttendeeData = async (paramType, paramValue) => {
-            try {
-                const query = new URLSearchParams({ type: paramType, value: paramValue });
-                const response = await fetch(`${BACKEND_URL}/api/attendee?${query}`, { method: 'GET' });
-
-                if (!response.ok) {
-                    throw new Error(`API request failed with status ${response.status}: ${response.statusText}`);
-                }
-
-                const data = await response.json();
-                if (!data.success || !data.attendee) {
-                    throw new Error(data.error || 'Attendee lookup failed');
-                }
-
-                return data.attendee;
-            } catch (error) {
-                throw error;
-            }
+            const query = new URLSearchParams({ type: paramType, value: paramValue });
+            const response = await fetch(`${BACKEND_URL}/api/attendee?${query}`, { method: 'GET' });
+            if (!response.ok) throw new Error(`API request failed with status ${response.status}: ${response.statusText}`);
+            const data = await response.json();
+            if (!data.success || !data.attendee) throw new Error(data.error || 'Attendee lookup failed');
+            return data.attendee;
         };
 
         const fetchAttendeeByAnyId = async (idTicket) => {
-            const lookups = [
-                fetchAttendeeData('idreg', idTicket),
-                fetchAttendeeData('idma', idTicket)
-            ];
+            const lookups = [fetchAttendeeData('idreg', idTicket), fetchAttendeeData('idma', idTicket)];
             const results = await Promise.allSettled(lookups);
             const success = results.find(result => result.status === 'fulfilled');
             if (success) return success.value;
@@ -520,7 +535,7 @@
             const companyLine1 = escapeHTML(companyLine1Raw);
             const companyLine2 = escapeHTML(companyLine2Raw);
             return `
-                <div class="relative w-full h-full bg-white overflow-hidden rounded-xl">
+                <div class="relative w-full h-full bg-white overflow-hidden rounded-2xl">
                     <div class="absolute inset-y-0 left-1/2 w-[95.24%] -translate-x-1/2 bg-white text-black font-sans">
                         <div class="absolute left-[6.25%] top-[6.67%] text-[clamp(17px,3vw,34px)] leading-none font-normal uppercase">
                             ${safeCategory}
@@ -531,26 +546,15 @@
                         <div class="absolute left-[6.25%] top-[31.67%] max-w-[88%] text-[clamp(17px,3vw,34px)] leading-none font-normal whitespace-nowrap overflow-hidden">
                             ${companyLine1}
                         </div>
-                        ${companyLine2 ? `
-                        <div class="absolute left-[6.25%] top-[37.5%] max-w-[88%] text-[clamp(17px,3vw,34px)] leading-none font-normal whitespace-nowrap overflow-hidden">
-                            ${companyLine2}
-                        </div>` : ''}
+                        ${companyLine2 ? `<div class="absolute left-[6.25%] top-[37.5%] max-w-[88%] text-[clamp(17px,3vw,34px)] leading-none font-normal whitespace-nowrap overflow-hidden">${companyLine2}</div>` : ''}
                         <div class="absolute left-[25%] top-[53.33%] w-[50%] aspect-square">
                             <div id="qrcode-${codeId}" class="w-full h-full bg-white"></div>
                         </div>
                     </div>
-                </div>
-            `;
+                </div>`;
         };
-        
-        // This function creates the browser print-preview layout.
+
         const createPrintBadgeHTML = (attendee) => {
-            // Convert 0.01mm layout coordinates into percentages for HTML.
-            // Label size is 90mm x 120mm, so width=9000 (90mm*100) and height=12000 (120mm*100)
-            // QR code at H0818, V00661 -> H=818/9000*100% ~ 9.1%, V=661/12000*100% ~ 5.5%
-            // Name at H0770, V00829 -> H=770/9000*100% ~ 8.6%, V=829/1200*100% ~ 6.9%
-            // Event title at H0866, V00145 -> H=866/9000*100% ~ 9.6%, V=145/1200*100% ~ 1.2%
-            // Category at H0914, V01058 -> H=914/9000*100% ~ 10.2%, V=1058/1200*100% ~ 8.8%
             const qrLeft = (818 / 9000) * 100;
             const qrTop = (661 / 12000) * 100;
             const nameLeft = (770 / 9000) * 100;
@@ -559,298 +563,126 @@
             const categoryTop = (1058 / 12000) * 100;
             const codeId = safeDomId(attendee.code);
             const safeCategory = escapeHTML(attendee.category);
-            
             return `
-                <div class="print-badge-content" style="width: 90mm; height: 120mm; box-sizing: border-box; background: white; display: block; margin: 0; padding: 0; font-family: 'Poppins', sans-serif; overflow: hidden; position: relative; color: #000;">
-                    
-                    <div style="position: absolute; left: ${qrLeft}%; top: ${qrTop}%; width: 45mm; height: 45mm;">
-                        <div id="qrcode-print-${codeId}" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;"></div>
+                <div class="print-badge-content" style="width:90mm;height:120mm;box-sizing:border-box;background:white;display:block;margin:0;padding:0;font-family:'Poppins',sans-serif;overflow:hidden;position:relative;color:#000;">
+                    <div style="position:absolute;left:${qrLeft}%;top:${qrTop}%;width:45mm;height:45mm;">
+                        <div id="qrcode-print-${codeId}" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"></div>
                     </div>
-
-                    <div style="position: absolute; left: ${nameLeft}%; top: ${nameTop}%; font-size: 36pt; font-weight: bold;">
-                        ${escapeHTML(attendee.name)}
-                    </div>
-
-                    <div style="position: absolute; left: ${nameLeft}%; top: ${(nameTop + 8)}%; font-size: 36pt; font-weight: bold;">
-                        ${escapeHTML(attendee.company)}
-                    </div>
-
-                    <div style="position: absolute; left: ${categoryLeft}%; top: ${categoryTop}%; font-size: 22pt; font-weight: bold;">
-                        ${safeCategory}
-                    </div>
-
-                </div>
-            `;
+                    <div style="position:absolute;left:${nameLeft}%;top:${nameTop}%;font-size:36pt;font-weight:bold;">${escapeHTML(attendee.name)}</div>
+                    <div style="position:absolute;left:${nameLeft}%;top:${(nameTop + 8)}%;font-size:36pt;font-weight:bold;">${escapeHTML(attendee.company)}</div>
+                    <div style="position:absolute;left:${categoryLeft}%;top:${categoryTop}%;font-size:22pt;font-weight:bold;">${safeCategory}</div>
+                </div>`;
         };
 
         const generateQRCode = (elementId, attendee, size) => {
             const qrElement = document.getElementById(elementId);
-            if(qrElement) {
+            if (qrElement) {
                 qrElement.innerHTML = '';
-                // Use just the ID as the QR code content
-                const qrContent = attendee.code;
-                new QRCode(qrElement, {
-                    text: qrContent, // QR code now contains just the ID
-                    width: size,
-                    height: size,
-                    colorDark: "#000000",
-                    colorLight: "#ffffff",
-                    correctLevel: QRCode.CorrectLevel.H
-                });
-                qrElement.querySelectorAll('canvas, img').forEach((node) => {
-                    node.style.width = '100%';
-                    node.style.height = '100%';
-                });
+                new QRCode(qrElement, { text: attendee.code, width: size, height: size, colorDark: "#000000", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.H });
+                qrElement.querySelectorAll('canvas, img').forEach((node) => { node.style.width = '100%'; node.style.height = '100%'; });
             }
         };
 
         const createQrCanvas = async (text, size = 400) => {
             const holder = document.createElement('div');
-            holder.style.position = 'fixed';
-            holder.style.left = '-9999px';
-            holder.style.top = '-9999px';
+            holder.style.position = 'fixed'; holder.style.left = '-9999px'; holder.style.top = '-9999px';
             document.body.appendChild(holder);
-
-            new QRCode(holder, {
-                text: text || 'NO-CODE',
-                width: size,
-                height: size,
-                colorDark: '#000000',
-                colorLight: '#ffffff',
-                correctLevel: QRCode.CorrectLevel.H
-            });
-
+            new QRCode(holder, { text: text || 'NO-CODE', width: size, height: size, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
             await new Promise(resolve => setTimeout(resolve, 0));
             const canvas = holder.querySelector('canvas');
-            if (canvas) {
-                const copy = document.createElement('canvas');
-                copy.width = size;
-                copy.height = size;
-                copy.getContext('2d').drawImage(canvas, 0, 0, size, size);
-                holder.remove();
-                return copy;
-            }
-
+            if (canvas) { const copy = document.createElement('canvas'); copy.width = size; copy.height = size; copy.getContext('2d').drawImage(canvas, 0, 0, size, size); holder.remove(); return copy; }
             const qrImg = holder.querySelector('img');
             if (qrImg) {
-                await new Promise(resolve => {
-                    if (qrImg.complete) return resolve();
-                    qrImg.onload = resolve;
-                    qrImg.onerror = resolve;
-                });
-                const copy = document.createElement('canvas');
-                copy.width = size;
-                copy.height = size;
-                copy.getContext('2d').drawImage(qrImg, 0, 0, size, size);
-                holder.remove();
-                return copy;
+                await new Promise(resolve => { if (qrImg.complete) return resolve(); qrImg.onload = resolve; qrImg.onerror = resolve; });
+                const copy = document.createElement('canvas'); copy.width = size; copy.height = size; copy.getContext('2d').drawImage(qrImg, 0, 0, size, size); holder.remove(); return copy;
             }
-
-            holder.remove();
-            throw new Error('Could not generate QR canvas.');
+            holder.remove(); throw new Error('Could not generate QR canvas.');
         };
 
         const drawFittedText = (ctx, text, x, y, maxWidth, fontSize, weight = '400') => {
-            const safeText = String(text || '');
-            let size = fontSize;
-            do {
-                ctx.font = `${weight} ${size}px Poppins, Arial, sans-serif`;
-                if (ctx.measureText(safeText).width <= maxWidth || size <= 26) break;
-                size -= 4;
-            } while (size > 26);
+            const safeText = String(text || ''); let size = fontSize;
+            do { ctx.font = `${weight} ${size}px Poppins, Arial, sans-serif`; if (ctx.measureText(safeText).width <= maxWidth || size <= 26) break; size -= 4; } while (size > 26);
             ctx.fillText(safeText, x, y);
         };
 
         const createBadgeImageDataUrl = async (attendee) => {
-            if (document.fonts && document.fonts.ready) {
-                try { await document.fonts.ready; } catch (_) {}
-            }
-
-            // Canvas matches the printable CONTENT AREA only (the white
-            // rectangle below the 57 mm pre-printed header on the badge front).
-            // 101.6 mm wide x 95.4 mm tall @ 203 dpi = 812 x 763 dots.
-            // The backend (_image_to_gfa) places this image at y=456 (57 mm)
-            // on a 152.4 mm panel, preserving its aspect ratio (no stretch).
-            const W = 812;
-            const H = 763;
-            const canvas = document.createElement('canvas');
-            canvas.width = W;
-            canvas.height = H;
+            if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (_) {} }
+            const W = 812, H = 763;
+            const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, W, H);
-            ctx.fillStyle = '#000000';
-            ctx.textBaseline = 'top';
-            ctx.textAlign = 'center';           // horizontally center every line
-            const cx = W / 2;                    // horizontal center
-            const maxTextW = W - 60;             // side margins for text
-
-            const clean = {
-                name: sanitizeAscii(attendee.name),
-                company: sanitizeAscii(attendee.company),
-                category: sanitizeAscii(attendee.category || 'Delegate').toUpperCase(),
-                code: sanitizeAscii(attendee.code || 'NO-CODE'),
-                eventcat: sanitizeAscii(attendee.eventcat || '').toUpperCase()
-            };
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = '#000000'; ctx.textBaseline = 'top'; ctx.textAlign = 'center';
+            const cx = W / 2, maxTextW = W - 60;
+            const clean = { name: sanitizeAscii(attendee.name), company: sanitizeAscii(attendee.company), category: sanitizeAscii(attendee.category || 'Delegate').toUpperCase(), code: sanitizeAscii(attendee.code || 'NO-CODE'), eventcat: sanitizeAscii(attendee.eventcat || '').toUpperCase() };
             const nameLine1 = deriveNameLine1(clean.name);
             const [companyLine1, companyLine2] = splitCompanyLines(clean.company);
             const hasEventcat = clean.eventcat && clean.eventcat !== 'N/A';
-
-            // Layout mimics the reference badge: content packed at the TOP of
-            // the white area (just below the header), centered, in this order:
-            //   Name (dominant, bold) -> Company -> Category (bold) -> QR
-            //   -> Event category.
-            const QR_SIZE = 300;                 // ~37 mm square graphic
-            let y = 50;                          // small gap below the header
-
-            // 1. Name — dominant, bold
-            drawFittedText(ctx, nameLine1, cx, y, maxTextW, 100, '700');
-            y += 100 + 12;
-
-            // 2. Company (1-2 lines)
-            drawFittedText(ctx, companyLine1, cx, y, maxTextW, 56, '500');
-            y += 56 + 6;
-            if (companyLine2) {
-                drawFittedText(ctx, companyLine2, cx, y, maxTextW, 56, '500');
-                y += 56 + 6;
-            }
-
-            // 3. Category — bold small caps
-            drawFittedText(ctx, clean.category, cx, y, maxTextW, 40, '700');
-            y += 40 + 22;
-
-            // 4. QR code — centered
+            const QR_SIZE = 300; let y = 50;
+            drawFittedText(ctx, nameLine1, cx, y, maxTextW, 100, '700'); y += 112;
+            drawFittedText(ctx, companyLine1, cx, y, maxTextW, 56, '500'); y += 62;
+            if (companyLine2) { drawFittedText(ctx, companyLine2, cx, y, maxTextW, 56, '500'); y += 62; }
+            drawFittedText(ctx, clean.category, cx, y, maxTextW, 40, '700'); y += 62;
             const qrCanvas = await createQrCanvas(clean.code, QR_SIZE);
-            ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(qrCanvas, (W - QR_SIZE) / 2, y, QR_SIZE, QR_SIZE);
-            y += QR_SIZE + 18;
-
-            // 5. Event category (e.g. "TECH SUMMIT 2026")
-            if (hasEventcat) {
-                drawFittedText(ctx, clean.eventcat, cx, y, maxTextW, 44, '400');
-            }
-
+            ctx.imageSmoothingEnabled = false; ctx.drawImage(qrCanvas, (W - QR_SIZE) / 2, y, QR_SIZE, QR_SIZE); y += QR_SIZE + 18;
+            if (hasEventcat) { drawFittedText(ctx, clean.eventcat, cx, y, maxTextW, 44, '400'); }
             return canvas.toDataURL('image/png');
         };
 
-
-        // Send print request to backend API. The backend renders the badge
-        // image server-side (matching make_label_image.py) from the attendee
-        // fields, so no canvas image needs to be sent. eventcat is included
-        // via the spread below.
         const sendToPrinter = async (attendee) => {
             try {
-                // Sanitize attendee data to remove problematic characters before sending to backend.
-                const sanitizedAttendee = {
-                    ...attendee,
-                    name: String(attendee.name ?? '').replace(/[^\x00-\x7F]/g, ""),
-                    jobTitle: String(attendee.jobTitle ?? '').replace(/[^\x00-\x7F]/g, ""),
-                    category: String(attendee.category ?? '').replace(/[^\x00-\x7F]/g, ""),
-                    company: String(attendee.company ?? '').replace(/[^\x00-\x7F]/g, ""),
-                    code: String(attendee.code ?? '').replace(/[^\x00-\x7F]/g, ""),
-                    eventcat: String(attendee.eventcat ?? '').replace(/[^\x00-\x7F]/g, "")
-                };
-                const response = await fetch(`${BACKEND_URL}/api/print`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-API-Key': 'test123'
-                    },
-                    body: JSON.stringify({
-                        print_mode: 'image',
-                        printer_label: selectedPrinterLabel,
-                        attendee: sanitizedAttendee
-                    })
-                });
-
+                const sanitizedAttendee = { ...attendee, name: String(attendee.name ?? '').replace(/[^\x00-\x7F]/g, ""), jobTitle: String(attendee.jobTitle ?? '').replace(/[^\x00-\x7F]/g, ""), category: String(attendee.category ?? '').replace(/[^\x00-\x7F]/g, ""), company: String(attendee.company ?? '').replace(/[^\x00-\x7F]/g, ""), code: String(attendee.code ?? '').replace(/[^\x00-\x7F]/g, ""), eventcat: String(attendee.eventcat ?? '').replace(/[^\x00-\x7F]/g, "") };
+                const response = await fetch(`${BACKEND_URL}/api/print`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-API-Key': 'test123' }, body: JSON.stringify({ print_mode: 'image', printer_label: selectedPrinterLabel, attendee: sanitizedAttendee }) });
                 const result = await response.json();
-
-                if (response.ok && result.success) {
-                    console.log('Print command sent successfully via backend!');
-                    return { success: true, message: result.message };
-                } else {
-                    throw new Error(result.error || `HTTP error! Status: ${response.status}`);
-                }
-            } catch (error) {
-                console.error('Failed to send print request to backend:', error);
-                return { success: false, error: error.message };
-            }
+                if (response.ok && result.success) { console.log('Print command sent successfully via backend!'); return { success: true, message: result.message }; }
+                else { throw new Error(result.error || `HTTP error! Status: ${response.status}`); }
+            } catch (error) { console.error('Failed to send print request to backend:', error); return { success: false, error: error.message }; }
         };
 
         const handlePreview = async () => {
             const code = attendeeCodeInput.value.trim();
-            if (!code) {
-                errorMessage.textContent = 'Please enter an attendee code.';
-                return;
-            }
-
+            if (!code) { errorMessage.textContent = 'Please enter an attendee code.'; return; }
             try {
                 currentAttendee = await fetchAttendeeByAnyId(code);
-                
                 errorMessage.textContent = '';
                 badgePlaceholder.classList.add('hidden');
                 badgePreviewContainer.classList.remove('hidden');
                 badgePreviewContainer.classList.add('flex');
                 badgePreviewContainer.innerHTML = createBadgeHTML(currentAttendee);
                 badgePrintContainer.innerHTML = createPrintBadgeHTML(currentAttendee);
-
-                // Generate QR code for the on-screen preview
+                previewPanel.classList.add('has-badge');
                 setTimeout(() => {
                     generateQRCode(`qrcode-${safeDomId(currentAttendee.code)}`, currentAttendee, 264);
-                    
-                    // Generate QR code for the print version as well
-                    generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120); // 80 * 1.5 = 120
+                    generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120);
                 }, 0);
-
                 printBtn.disabled = false;
-                printBtn.classList.remove('bg-slate-400', 'cursor-not-allowed');
-                printBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                printBtn.classList.remove('btn-disabled');
+                printBtn.classList.add('btn-success');
             } catch (error) {
                 console.error('Error fetching attendee data:', error);
                 errorMessage.textContent = `Attendee with Ticket Number "${code}" not found. Please check on Front Desk.`;
                 badgePlaceholder.classList.remove('hidden');
                 badgePreviewContainer.classList.add('hidden');
                 badgePreviewContainer.classList.remove('flex');
-                
+                previewPanel.classList.remove('has-badge');
                 printBtn.disabled = true;
-                printBtn.classList.add('bg-slate-400', 'cursor-not-allowed');
-                printBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                printBtn.classList.add('btn-disabled');
+                printBtn.classList.remove('btn-success');
             }
         };
-        
+
         const insertCode = (code) => {
-            // Insert the code into the input field
             attendeeCodeInput.value = code;
-            
-            // If in scan mode, switch to input mode
-            if (qrScannerArea.classList.contains('hidden') === false) {
-                switchToInputMode();
-            }
-            
-            // Focus on the input field
+            if (!qrScannerArea.classList.contains('hidden')) switchToInputMode();
             attendeeCodeInput.focus();
-            
-            // Optionally, you can auto-preview the badge
-            // Uncomment the next line if you want automatic preview
-            // handlePreview();
         };
-        
-        // Make insertCode available globally for onclick handlers
         window.insertCode = insertCode;
 
         const updateTime = () => {
             const now = new Date();
-            const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
-            const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-            
-            timeEl.textContent = now.toLocaleTimeString('en-US', timeOptions);
-            dateEl.textContent = now.toLocaleDateString('en-US', dateOptions);
+            timeEl.textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+            dateEl.textContent = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
         };
 
-        // Clear the badge preview and attendee state so the next person in the
-        // queue never sees the badge that was just printed. Returns the screen
-        // to its initial "empty" state. Used after a successful print in both
-        // manual and QR modes.
         const resetBadgePreview = () => {
             currentAttendee = null;
             badgePreviewContainer.innerHTML = '';
@@ -858,48 +690,38 @@
             badgePreviewContainer.classList.add('hidden');
             badgePreviewContainer.classList.remove('flex');
             badgePlaceholder.classList.remove('hidden');
+            previewPanel.classList.remove('has-badge');
             attendeeCodeInput.value = '';
             errorMessage.textContent = '';
             printBtn.disabled = true;
-            printBtn.classList.add('bg-slate-400', 'cursor-not-allowed');
-            printBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+            printBtn.classList.add('btn-disabled');
+            printBtn.classList.remove('btn-success');
         };
 
         const showScanSuccess = (attendee) => {
             scannedAttendeeName.textContent = attendee.name;
             scanSuccessNotification.classList.remove('hidden');
-            
-            // Hide the notification AND clear the badge preview after 3 seconds
-            // so the next person in the queue doesn't see the last printed badge.
-            setTimeout(() => {
-                scanSuccessNotification.classList.add('hidden');
-                resetBadgePreview();
-            }, 3000);
+            setTimeout(() => { scanSuccessNotification.classList.add('hidden'); }, 3000);
         };
 
-        // Function to handle manual ID entry (separate from API details)
         const handleManualIdEntry = async (idTicket) => {
             try {
                 currentAttendee = await fetchAttendeeByAnyId(idTicket);
-                
                 attendeeCodeInput.value = idTicket;
-                
                 errorMessage.textContent = '';
                 badgePlaceholder.classList.add('hidden');
                 badgePreviewContainer.classList.remove('hidden');
                 badgePreviewContainer.classList.add('flex');
                 badgePreviewContainer.innerHTML = createBadgeHTML(currentAttendee);
                 badgePrintContainer.innerHTML = createPrintBadgeHTML(currentAttendee);
-                
+                previewPanel.classList.add('has-badge');
                 setTimeout(() => {
                     generateQRCode(`qrcode-${safeDomId(currentAttendee.code)}`, currentAttendee, 264);
-                    generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120); // 80 * 1.5 = 120
+                    generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120);
                 }, 0);
-                
                 printBtn.disabled = false;
-                printBtn.classList.remove('bg-slate-400', 'cursor-not-allowed');
-                printBtn.classList.add('bg-green-600', 'hover:bg-green-700');
-                
+                printBtn.classList.remove('btn-disabled');
+                printBtn.classList.add('btn-success');
                 return true;
             } catch (error) {
                 console.error('Error fetching attendee data:', error);
@@ -910,316 +732,160 @@
 
         const startScanner = () => {
             qrStatus.textContent = 'Camera is active - Point at QR code to scan';
-            
-            // Start the real camera for scanning
-            if (!html5QrCode) {
-                html5QrCode = new Html5Qrcode("qr-reader");
-            }
-            
-            let isProcessing = false; // Flag to prevent multiple simultaneous processing
+            if (!html5QrCode) { html5QrCode = new Html5Qrcode("qr-reader"); }
+
+            let isProcessing = false;
             const qrCodeSuccessCallback = async (decodedText, decodedResult) => {
-                // Prevent processing if already handling a QR code
-                if (isProcessing) {
-                    return;
-                }
-                
+                if (isProcessing) return;
                 isProcessing = true;
-                
                 try {
-                    // Extract idreg or idma from the URL if it matches the expected format
                     const idregPattern = /https:\/\/tickets\.w\.media\/link\?idreg=(\d+)/;
                     const idmaPattern = /https:\/\/tickets\.w\.media\/link\?idma=(\d+)/;
                     const idregMatch = decodedText.match(idregPattern);
                     const idmaMatch = decodedText.match(idmaPattern);
-                    
+
                     if (idregMatch) {
-                        const idValue = idregMatch[1]; // Extract the ID from the URL
-                        
+                        const idValue = idregMatch[1];
                         try {
-                            // Fetch attendee data from API using the extracted ID as idreg
                             currentAttendee = await fetchAttendeeData('idreg', idValue);
-                            
-                            attendeeCodeInput.value = idValue; // Store the ID in the input field
+                            attendeeCodeInput.value = idValue;
                             qrStatus.textContent = 'QR Code processed successfully';
-                            
-                            // Generate the badge content
                             badgePlaceholder.classList.add('hidden');
                             badgePreviewContainer.classList.remove('hidden');
                             badgePreviewContainer.classList.add('flex');
                             badgePreviewContainer.innerHTML = createBadgeHTML(currentAttendee);
                             badgePrintContainer.innerHTML = createPrintBadgeHTML(currentAttendee);
-                            
+                            previewPanel.classList.add('has-badge');
                             setTimeout(() => {
                                 generateQRCode(`qrcode-${safeDomId(currentAttendee.code)}`, currentAttendee, 264);
-                                generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120); // 80 * 1.5 = 120
+                                generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120);
                             }, 0);
-                            
                             printBtn.disabled = false;
-                            printBtn.classList.remove('bg-slate-400', 'cursor-not-allowed');
-                            printBtn.classList.add('bg-green-600', 'hover:bg-green-700');
-                            
-                            // Automatically print the badge without showing popup
+                            printBtn.classList.remove('btn-disabled');
+                            printBtn.classList.add('btn-success');
                             const result = await sendToPrinter(currentAttendee);
-                            if (result.success) {
-                                qrStatus.textContent = 'Badge printed! Ready to scan next QR code.';
-                                
-                                // Show success notification briefly
-                                showScanSuccess(currentAttendee);
-                            } else {
-                                qrStatus.textContent = `Print failed: ${result.error}`;
-                            }
-                            
-                        } catch (error) {
-                            console.error('Error fetching attendee data:', error);
-                            qrStatus.textContent = `Error: ${error.message}`;
-                        }
+                            if (result.success) { qrStatus.textContent = 'Badge printed! Tap "Reprint" if needed.'; showScanSuccess(currentAttendee); }
+                            else { qrStatus.textContent = `Print failed: ${result.error}`; }
+                            printFromQrBtn.classList.remove('hidden');
+                        } catch (error) { console.error('Error fetching attendee data:', error); qrStatus.textContent = `Error: ${error.message}`; }
                     } else if (idmaMatch) {
-                        const idValue = idmaMatch[1]; // Extract the ID from the URL
-                        
+                        const idValue = idmaMatch[1];
                         try {
-                            // Fetch attendee data from API using the extracted ID as idma
                             currentAttendee = await fetchAttendeeData('idma', idValue);
-                            
-                            attendeeCodeInput.value = idValue; // Store the ID in the input field
+                            attendeeCodeInput.value = idValue;
                             qrStatus.textContent = 'QR Code processed successfully';
-                            
-                            // Generate the badge content
                             badgePlaceholder.classList.add('hidden');
                             badgePreviewContainer.classList.remove('hidden');
                             badgePreviewContainer.classList.add('flex');
                             badgePreviewContainer.innerHTML = createBadgeHTML(currentAttendee);
                             badgePrintContainer.innerHTML = createPrintBadgeHTML(currentAttendee);
-                            
+                            previewPanel.classList.add('has-badge');
                             setTimeout(() => {
                                 generateQRCode(`qrcode-${safeDomId(currentAttendee.code)}`, currentAttendee, 264);
-                                generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120); // 80 * 1.5 = 120
+                                generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120);
                             }, 0);
-                            
                             printBtn.disabled = false;
-                            printBtn.classList.remove('bg-slate-400', 'cursor-not-allowed');
-                            printBtn.classList.add('bg-green-600', 'hover:bg-green-700');
-                            
-                            // Automatically print the badge without showing popup
+                            printBtn.classList.remove('btn-disabled');
+                            printBtn.classList.add('btn-success');
                             const result = await sendToPrinter(currentAttendee);
-                            if (result.success) {
-                                qrStatus.textContent = 'Badge printed! Ready to scan next QR code.';
-                                
-                                // Show success notification briefly
-                                showScanSuccess(currentAttendee);
-                            } else {
-                                qrStatus.textContent = `Print failed: ${result.error}`;
-                            }
-                            
-                        } catch (error) {
-                            console.error('Error fetching attendee data:', error);
-                            qrStatus.textContent = `Error: ${error.message}`;
-                        }
-                    } else {
-                        qrStatus.textContent = `Invalid QR format: ${decodedText}`;
-                    }
-                } finally {
-                    // Reset the processing flag after a short delay to prevent multiple scans of the same QR
-                    setTimeout(() => {
-                        isProcessing = false;
-                    }, 3000); // Wait 3 seconds before allowing another scan
-                }
+                            if (result.success) { qrStatus.textContent = 'Badge printed! Tap "Reprint" if needed.'; showScanSuccess(currentAttendee); }
+                            else { qrStatus.textContent = `Print failed: ${result.error}`; }
+                            printFromQrBtn.classList.remove('hidden');
+                        } catch (error) { console.error('Error fetching attendee data:', error); qrStatus.textContent = `Error: ${error.message}`; }
+                    } else { qrStatus.textContent = `Invalid QR format: ${decodedText}`; }
+                } finally { setTimeout(() => { isProcessing = false; }, 3000); }
             };
-            
-            const config = {
-                fps: 10,
-                qrbox: { width: 450, height: 450 }
-            };
-            
-            // ==========================================================
-            // === THIS IS THE MODIFIED FUNCTION FOR IPAD SUPPORT ===
-            // ==========================================================
+
+            const config = { fps: 10, qrbox: { width: 350, height: 350 } };
+
             const cameraPermissionAndStart = async () => {
                 try {
-                    // Check if we're on localhost, 127.0.0.1, or a local IP address (for network access) or HTTPS (required for camera access)
                     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-                    const isLocalNetwork = /^192\.168\.\d+\.\d+$/.test(window.location.hostname) ||
-                                            /^10\.\d+\.\d+\.\d+$/.test(window.location.hostname) ||
-                                            /^172\.(1[6-9]|2[0-9]|3[01])\.\d+\.\d+$/.test(window.location.hostname) ||
-                                            window.location.hostname === '0.0.0.0';
+                    const isLocalNetwork = /^192\.168\.\d+\.\d+$/.test(window.location.hostname) || /^10\.\d+\.\d+\.\d+$/.test(window.location.hostname) || /^172\.(1[6-9]|2[0-9]|3[01])\.\d+\.\d+$/.test(window.location.hostname) || window.location.hostname === '0.0.0.0';
                     const isHttps = window.location.protocol === 'https:';
-                    
-                    if (!isLocalhost && !isLocalNetwork && !isHttps) {
-                        qrStatus.textContent = 'Camera access requires HTTPS. Please run on a secure connection.';
-                        console.error('Camera access requires HTTPS, localhost, or local network address.');
-                        return;
-                    }
-                    
-                    // --- MODIFIED SECTION ---
-                    // Start with the currently selected camera. facingMode is
-                    // toggled by the "Switch Camera" button (front <-> back).
-                    await html5QrCode.start(
-                        { facingMode: currentFacingMode },
-                        config,
-                        qrCodeSuccessCallback
-                    );
-                    // --- END MODIFIED SECTION ---
-
+                    if (!isLocalhost && !isLocalNetwork && !isHttps) { qrStatus.textContent = 'Camera access requires HTTPS.'; return; }
+                    await html5QrCode.start({ facingMode: currentFacingMode }, config, qrCodeSuccessCallback);
                     qrStatus.textContent = 'Camera is active - Point at QR code to scan';
-
                 } catch (err) {
-                    // Provide more helpful error messages
-                    if (err.name === "NotReadableError" || err.message.includes("Could not start video source")) {
-                        qrStatus.textContent = 'No suitable camera found or camera is in use.';
-                    } else if (err.name === "NotAllowedError") {
-                        qrStatus.textContent = 'Camera permission was denied. Please allow camera access in your browser settings.';
-                    } else {
-                        qrStatus.textContent = `Camera error: ${err.message || 'Unable to start camera'}`;
-                    }
+                    if (err.name === "NotReadableError" || (err.message && err.message.includes("Could not start video source"))) { qrStatus.textContent = 'No suitable camera found or camera is in use.'; }
+                    else if (err.name === "NotAllowedError") { qrStatus.textContent = 'Camera permission denied. Allow camera access in browser settings.'; }
+                    else { qrStatus.textContent = `Camera error: ${err.message || 'Unable to start camera'}`; }
                     console.error("Unable to start scanning.", err);
                 }
             };
-            // ==========================================================
-            // === END OF MODIFIED FUNCTION ===
-            // ==========================================================
-            
             cameraPermissionAndStart();
         };
 
         const stopScanner = () => {
-            
-            // Stop the real camera
             if (html5QrCode && html5QrCode.isScanning) {
-                html5QrCode.stop().then(() => {
-                    console.log("QR Code scanning stopped.");
-                }).catch(err => {
-                    console.error("Failed to stop QR Code scanning.", err);
-                });
+                html5QrCode.stop().then(() => console.log("QR scanning stopped.")).catch(err => console.error("Failed to stop QR scanning.", err));
             }
         };
 
-        // Toggle between the front ('user') and back ('environment') camera.
-        // Stops the active stream (awaited) before restarting so the device
-        // doesn't report the camera as busy.
         const switchCamera = async () => {
             currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
             qrStatus.textContent = `Switching to ${currentFacingMode === 'user' ? 'front' : 'back'} camera...`;
             switchCameraBtn.disabled = true;
-            try {
-                if (html5QrCode && html5QrCode.isScanning) {
-                    await html5QrCode.stop();
-                }
-                startScanner();
-            } catch (err) {
-                console.error('Failed to switch camera.', err);
-                qrStatus.textContent = `Camera switch failed: ${err.message || err}`;
-            } finally {
-                switchCameraBtn.disabled = false;
-            }
+            try { if (html5QrCode && html5QrCode.isScanning) { await html5QrCode.stop(); } startScanner(); }
+            catch (err) { console.error('Failed to switch camera.', err); qrStatus.textContent = `Camera switch failed: ${err.message || err}`; }
+            finally { switchCameraBtn.disabled = false; }
         };
 
         const switchToInputMode = () => {
             stopScanner();
-            
-            // Hide scanner and show normal layout
             qrScannerArea.classList.add('hidden');
-            qrScannerArea.classList.remove('full-height');
             inputArea.classList.remove('hidden');
-            
-            // Hide success notification if visible
             scanSuccessNotification.classList.add('hidden');
-            
-            // Hide header in right column
+            printFromQrBtn.classList.add('hidden');
             scanModeHeader.classList.add('hidden');
-            
-            modeInputBtn.classList.add('bg-blue-600', 'text-white');
-            modeInputBtn.classList.remove('text-blue-200', 'hover:bg-blue-600', 'hover:text-white');
-            modeScanBtn.classList.remove('bg-blue-600', 'text-white');
-            modeScanBtn.classList.add('text-blue-200', 'hover:bg-blue-600', 'hover:text-white');
-            
-            // Ensure badge preview remains visible if there's a current attendee
+            modeInputBtn.classList.add('active');
+            modeScanBtn.classList.remove('active');
             if (currentAttendee) {
                 badgePlaceholder.classList.add('hidden');
                 badgePreviewContainer.classList.remove('hidden');
                 badgePreviewContainer.classList.add('flex');
+                previewPanel.classList.add('has-badge');
             }
         };
 
         const switchToScanMode = () => {
-            // Show scanner full height in left column
             qrScannerArea.classList.remove('hidden');
-            qrScannerArea.classList.add('full-height');
-            
-            // Hide input area
             inputArea.classList.add('hidden');
-            
-            // Show header in right column
             scanModeHeader.classList.remove('hidden');
-            
-            modeScanBtn.classList.add('bg-blue-600', 'text-white');
-            modeScanBtn.classList.remove('text-blue-200', 'hover:bg-blue-600', 'hover:text-white');
-            modeInputBtn.classList.remove('bg-blue-600', 'text-white');
-            modeInputBtn.classList.add('text-blue-200', 'hover:bg-blue-600', 'hover:text-white');
-            
+            modeScanBtn.classList.add('active');
+            modeInputBtn.classList.remove('active');
             startScanner();
-            
-            // Ensure badge preview remains visible if there's a current attendee
             if (currentAttendee) {
                 badgePlaceholder.classList.add('hidden');
                 badgePreviewContainer.classList.remove('hidden');
                 badgePreviewContainer.classList.add('flex');
+                previewPanel.classList.add('has-badge');
             }
         };
 
-        // Debug function to show badge content temporarily
         const showDebugBadge = () => {
             const debugBadge = document.getElementById('debug-badge');
-            if (debugBadge && currentAttendee) {
-                debugBadge.innerHTML = badgePrintContainer.innerHTML;
-                debugBadge.style.display = 'block';
-                
-                // Hide after 5 seconds
-                setTimeout(() => {
-                    debugBadge.style.display = 'none';
-                }, 5000);
-            }
+            if (debugBadge && currentAttendee) { debugBadge.innerHTML = badgePrintContainer.innerHTML; debugBadge.style.display = 'block'; setTimeout(() => { debugBadge.style.display = 'none'; }, 5000); }
         };
 
-        let handlePrintProcessing = false; // Flag to prevent multiple print attempts from Print button
-        // Print function - send request to backend API
+        let handlePrintProcessing = false;
         const handlePrint = async () => {
             if (!currentAttendee || printBtn.disabled || handlePrintProcessing) return;
-
             handlePrintProcessing = true;
-            console.log('Starting print via backend API...');
-
-            // Update button to show printing status
-            const originalText = printBtn.textContent;
-            printBtn.textContent = 'Sending to Printer...';
+            const originalHTML = printBtn.innerHTML;
+            printBtn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Sending...';
             printBtn.disabled = true;
-
             try {
-                // Send attendee data to backend API
                 const result = await sendToPrinter(currentAttendee);
-
                 if (result.success) {
-                    // Show success feedback
-                    printBtn.textContent = 'Print Sent!';
-                    // Close the scan success notification after successful print
+                    printBtn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Sent!';
                     scanSuccessNotification.classList.add('hidden');
-                    setTimeout(() => {
-                        printBtn.textContent = originalText;
-                        handlePrintProcessing = false;
-                        // Clear the preview so the next person in the queue
-                        // doesn't see the badge that was just printed.
-                        resetBadgePreview();
-                    }, 1500);
-                } else {
-                    throw new Error(result.error);
-                }
+                    setTimeout(() => { printBtn.innerHTML = originalHTML; handlePrintProcessing = false; resetBadgePreview(); }, 1500);
+                } else { throw new Error(result.error); }
             } catch (error) {
                 console.error('Print failed:', error);
-                printBtn.textContent = 'Print Failed';
-                setTimeout(() => {
-                    printBtn.textContent = originalText;
-                    printBtn.disabled = false;
-                    handlePrintProcessing = false;
-                }, 3000);
-                // Show error to user
+                printBtn.innerHTML = 'Print Failed';
+                setTimeout(() => { printBtn.innerHTML = originalHTML; printBtn.disabled = false; handlePrintProcessing = false; }, 3000);
                 errorMessage.textContent = `Print failed: ${error.message}`;
             }
         };
@@ -1236,86 +902,53 @@
             selectedPrinterLabel = printerSelect.value;
             printerStatus.textContent = selectedPrinterLabel ? `Using ${selectedPrinterLabel}` : 'Using auto-detected Zebra USB printer.';
         });
-        
-        let printNowProcessing = false; // Flag to prevent multiple print attempts from Print Now button
-        printNowBtn.addEventListener('click', async () => {
-            // Prevent multiple clicks while processing
-            if (printNowProcessing) {
-                return;
-            }
-            
-            printNowProcessing = true;
-            
+
+        let printFromQrProcessing = false;
+        printFromQrBtn.addEventListener('click', async () => {
+            if (printFromQrProcessing || !currentAttendee) return;
+            printFromQrProcessing = true;
+            const origText = printFromQrBtn.innerHTML;
+            printFromQrBtn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Printing...';
+            printFromQrBtn.disabled = true;
             try {
-                // Hide the notification after clicking Print Now
+                const result = await sendToPrinter(currentAttendee);
+                if (result.success) { qrStatus.textContent = 'Badge reprinted! Tap "Reprint" again if needed.'; printFromQrBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> Done!'; setTimeout(() => { printFromQrBtn.innerHTML = origText; }, 1500); }
+                else { qrStatus.textContent = `Print failed: ${result.error}`; printFromQrBtn.innerHTML = origText; }
+            } catch (error) { qrStatus.textContent = `Print error: ${error.message}`; printFromQrBtn.innerHTML = origText; }
+            finally { printFromQrBtn.disabled = false; setTimeout(() => { printFromQrProcessing = false; }, 3000); }
+        });
+
+        let printNowProcessing = false;
+        printNowBtn.addEventListener('click', async () => {
+            if (printNowProcessing) return;
+            printNowProcessing = true;
+            try {
                 scanSuccessNotification.classList.add('hidden');
-                
-                // Don't switch to input mode - stay in scan mode
-                // Ensure currentAttendee is set before printing
                 if (currentAttendee) {
                     const result = await sendToPrinter(currentAttendee);
-                    if (result.success) {
-                        qrStatus.textContent = 'Badge printed! Ready to scan next QR code.';
-                        // Clear the preview so the next person doesn't see it.
-                        setTimeout(resetBadgePreview, 2000);
-                    } else {
-                        qrStatus.textContent = `Print failed: ${result.error}`;
-                    }
-                } else {
-                    console.error('No current attendee to print');
-                    qrStatus.textContent = 'Error: No attendee data to print';
-                }
-            } catch (error) {
-                console.error('Error in printNowBtn handler:', error);
-                qrStatus.textContent = `Print error: ${error.message}`;
-            } finally {
-                // Reset the processing flag after a delay
-                setTimeout(() => {
-                    printNowProcessing = false;
-                }, 3000);
-                
-                setTimeout(() => {
-                    qrStatus.textContent = 'Camera is active - Point at QR code to scan';
-                }, 3000);
-            }
+                    if (result.success) { qrStatus.textContent = 'Badge printed! Ready to scan next QR code.'; setTimeout(resetBadgePreview, 2000); }
+                    else { qrStatus.textContent = `Print failed: ${result.error}`; }
+                } else { qrStatus.textContent = 'Error: No attendee data to print'; }
+            } catch (error) { qrStatus.textContent = `Print error: ${error.message}`; }
+            finally { setTimeout(() => { printNowProcessing = false; }, 3000); setTimeout(() => { qrStatus.textContent = 'Camera is active - Point at QR code to scan'; }, 3000); }
         });
-        
-        
-        // Android Print Modal event listeners
+
+        // Android Print Modal
         const androidPrintModal = document.getElementById('android-print-modal');
         const androidModalClose = document.getElementById('android-modal-close');
         const androidModalPrint = document.getElementById('android-modal-print');
-        
-        androidModalClose.addEventListener('click', () => {
-            androidPrintModal.classList.add('hidden');
+        androidModalClose.addEventListener('click', () => { androidPrintModal.classList.add('hidden'); });
+        androidModalPrint.addEventListener('click', () => { androidPrintModal.classList.add('hidden'); setTimeout(() => { try { window.print(); } catch (e) { alert('Use browser menu to print (... > Print)'); } }, 100); });
+        androidPrintModal.addEventListener('click', (e) => { if (e.target === androidPrintModal) androidPrintModal.classList.add('hidden'); });
+
+        // Close badge preview on mobile when tapping overlay
+        previewPanel.addEventListener('click', (e) => {
+            if (window.innerWidth < 768 && e.target === previewPanel) { previewPanel.classList.remove('has-badge'); }
         });
-        
-        androidModalPrint.addEventListener('click', () => {
-            androidPrintModal.classList.add('hidden');
-            // Try to trigger print again
-            setTimeout(() => {
-                try {
-                    window.print();
-                } catch (error) {
-                    console.log('Print still not supported, showing fallback message');
-                    alert('Please use your browser\'s menu to print this page (⋮ → Print)');
-                }
-            }, 100);
-        });
-        
-        // Close modal when clicking outside
-        androidPrintModal.addEventListener('click', (e) => {
-            if (e.target === androidPrintModal) {
-                androidPrintModal.classList.add('hidden');
-            }
-        });
-        
 
         // --- Initial Setup ---
         document.addEventListener('DOMContentLoaded', () => {
-            // Ensure manual mode is active by default
             switchToInputMode();
-            
             attendeeCodeInput.placeholder = 'Enter your ID Ticket...';
             loadPrinters();
             updateTime();
