@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Self-Service Badge Printer</title>
-    <link rel="stylesheet" href="assets/tailwind.css?v=20260624c">
+    <link rel="stylesheet" href="assets/tailwind.css?v=20260624d">
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <link rel="stylesheet" href="fonts/poppins/poppins.css?v=20260624b">
@@ -148,35 +148,17 @@
         @media (min-width: 768px) { .input-ticket { padding: 18px 24px; font-size: 1.15rem; border-radius: 16px; } }
 
         /* QR Scanner */
-        #qr-reader {
-            width: 100%; height: 100%; border: none; overflow: hidden;
-            position: absolute; inset: 0; z-index: 1;
-        }
+        #qr-reader { width: 100%; height: 100%; border: none; overflow: hidden; }
         #qr-reader video { width: 100% !important; height: 100% !important; object-fit: cover; }
-        /* Force all html5-qrcode internal overlays (shaded region, scan box) to not block clicks on our header/footer */
-        #qr-reader > div, #qr-reader canvas, #qr-reader img { pointer-events: none !important; }
-        #qr-reader video { pointer-events: auto !important; }
 
-        .scanner-overlay {
-            position: absolute; inset: 0; z-index: 50;
-            background: #0a0f1e; display: flex; flex-direction: column;
-            isolation: isolate; /* create stacking context */
-        }
-        .scanner-header {
-            position: relative; z-index: 100; flex-shrink: 0;
-            padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 80%, transparent 100%);
-            pointer-events: auto;
-        }
-        .scanner-footer {
-            position: relative; z-index: 100; flex-shrink: 0; margin-top: auto;
-            padding: 24px; text-align: center;
-            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 80%, transparent 100%);
-            pointer-events: auto;
-        }
-        @media (min-width: 768px) {
-            .scanner-header { padding: 24px 28px; }
-            .scanner-footer { padding: 28px; }
+        #qr-scanner-area.scanner-active {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            width: 100%; height: 100%;
+            background: #0a0f1e;
+            display: flex; flex-direction: column;
+            padding: 0;
+            z-index: 50;
         }
 
         /* Success notification */
@@ -308,27 +290,24 @@
             </div>
 
             <!-- QR Scanner Overlay -->
-            <div id="qr-scanner-area" class="hidden scanner-overlay">
-                <div class="scanner-header">
+            <div id="qr-scanner-area" class="hidden">
+                <div class="absolute top-0 left-0 right-0 flex items-center justify-between p-4 md:p-5 z-10" style="background:linear-gradient(to bottom,rgba(0,0,0,0.7),transparent);">
                     <h2 class="text-lg md:text-xl font-bold text-white">Scan QR Code</h2>
                     <div class="flex items-center gap-2 flex-wrap justify-end">
-                        <button id="print-from-qr-btn" class="btn-touch btn-scanner-green hidden" style="min-height:44px; padding:10px 16px; font-size:0.9rem;">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                        <button id="print-from-qr-btn" class="hidden bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-semibold text-sm md:text-base">
                             Reprint
                         </button>
-                        <button id="switch-camera-btn" class="btn-touch btn-scanner" style="min-height:44px; padding:10px 16px; font-size:0.9rem;">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        <button id="switch-camera-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-semibold text-sm md:text-base">
                             Camera
                         </button>
-                        <button id="close-scanner-btn" class="btn-touch btn-scanner" style="min-height:44px; padding:10px 16px; font-size:0.9rem;">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                        <button id="close-scanner-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-semibold text-sm md:text-base">
                             Manual
                         </button>
                     </div>
                 </div>
-                <div id="qr-reader"></div>
-                <div class="scanner-footer">
-                    <p id="qr-status" class="text-white text-base md:text-lg font-medium">Point your camera at the QR code.</p>
+                <div class="w-full h-full flex flex-col">
+                    <div id="qr-reader" class="w-full h-full"></div>
+                    <p id="qr-status" class="absolute bottom-4 left-0 right-0 text-center text-white text-base md:text-lg z-10 font-medium" style="text-shadow:0 1px 4px rgba(0,0,0,0.5);">Point your camera at the QR code.</p>
                 </div>
 
                 <!-- Success notification -->
@@ -841,6 +820,7 @@
         const switchToInputMode = () => {
             stopScanner();
             qrScannerArea.classList.add('hidden');
+            qrScannerArea.classList.remove('scanner-active');
             inputArea.classList.remove('hidden');
             scanSuccessNotification.classList.add('hidden');
             printFromQrBtn.classList.add('hidden');
@@ -857,6 +837,7 @@
 
         const switchToScanMode = () => {
             qrScannerArea.classList.remove('hidden');
+            qrScannerArea.classList.add('scanner-active');
             inputArea.classList.add('hidden');
             scanModeHeader.classList.remove('hidden');
             modeScanBtn.classList.add('active');
