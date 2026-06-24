@@ -241,9 +241,14 @@
             <div id="qr-scanner-area" class="hidden full-height">
                 <div class="absolute top-0 left-0 right-0 flex items-center justify-between p-4 z-10">
                     <h2 class="text-2xl font-bold text-white">Scan QR Code</h2>
-                    <button id="close-scanner-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-semibold">
-                        Switch Manual
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button id="switch-camera-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-semibold">
+                            Switch Camera
+                        </button>
+                        <button id="close-scanner-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-semibold">
+                            Switch Manual
+                        </button>
+                    </div>
                 </div>
                 <div class="w-full h-full flex flex-col">
                     <div id="qr-reader" class="w-full h-full"></div>
@@ -342,6 +347,7 @@
         const inputArea = document.getElementById('input-area');
         const qrStatus = document.getElementById('qr-status');
         const closeScannerBtn = document.getElementById('close-scanner-btn');
+        const switchCameraBtn = document.getElementById('switch-camera-btn');
         const scanSuccessNotification = document.getElementById('scan-success-notification');
         const scannedAttendeeName = document.getElementById('scanned-attendee-name');
         const printNowBtn = document.getElementById('print-now-btn');
@@ -351,6 +357,7 @@
         const printerStatus = document.getElementById('printer-status');
 
         let currentAttendee = null;
+        let currentFacingMode = 'user'; // 'user' = front camera, 'environment' = back camera
         let html5QrCode = null;
         let selectedPrinterLabel = DEFAULT_PRINTER_LABEL;
         window.allUsbDevices = [];
@@ -1023,11 +1030,10 @@
                     }
                     
                     // --- MODIFIED SECTION ---
-                    // This is much more reliable on mobile devices like iPads.
-                    // It directly requests the 'user' (front) camera
-                    // instead of guessing based on camera labels.
+                    // Start with the currently selected camera. facingMode is
+                    // toggled by the "Switch Camera" button (front <-> back).
                     await html5QrCode.start(
-                        { facingMode: "user" }, // Request the front camera
+                        { facingMode: currentFacingMode },
                         config,
                         qrCodeSuccessCallback
                     );
@@ -1063,6 +1069,26 @@
                 }).catch(err => {
                     console.error("Failed to stop QR Code scanning.", err);
                 });
+            }
+        };
+
+        // Toggle between the front ('user') and back ('environment') camera.
+        // Stops the active stream (awaited) before restarting so the device
+        // doesn't report the camera as busy.
+        const switchCamera = async () => {
+            currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+            qrStatus.textContent = `Switching to ${currentFacingMode === 'user' ? 'front' : 'back'} camera...`;
+            switchCameraBtn.disabled = true;
+            try {
+                if (html5QrCode && html5QrCode.isScanning) {
+                    await html5QrCode.stop();
+                }
+                startScanner();
+            } catch (err) {
+                console.error('Failed to switch camera.', err);
+                qrStatus.textContent = `Camera switch failed: ${err.message || err}`;
+            } finally {
+                switchCameraBtn.disabled = false;
             }
         };
 
@@ -1183,6 +1209,7 @@
         modeInputBtn.addEventListener('click', switchToInputMode);
         modeScanBtn.addEventListener('click', switchToScanMode);
         closeScannerBtn.addEventListener('click', switchToInputMode);
+        switchCameraBtn.addEventListener('click', switchCamera);
         printerSelect.addEventListener('change', () => {
             selectedPrinterLabel = printerSelect.value;
             printerStatus.textContent = selectedPrinterLabel ? `Using ${selectedPrinterLabel}` : 'Using auto-detected Zebra USB printer.';
