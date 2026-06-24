@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Self-Service Badge Printer</title>
-    <link rel="stylesheet" href="assets/tailwind.css?v=20260624e">
+    <link rel="stylesheet" href="assets/tailwind.css?v=20260624f">
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <link rel="stylesheet" href="fonts/poppins/poppins.css?v=20260624b">
@@ -331,7 +331,7 @@
             </div>
 
             <div id="preview-section" class="flex items-center justify-center p-4 md:p-6 w-full h-full">
-                <div class="badge-card" id="badge-container">
+                <div class="badge-card" id="badge-container" style="position:relative;">
                     <div id="badge-placeholder" class="badge-placeholder">
                         <div style="width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,#e2e8f0,#cbd5e1);display:flex;align-items:center;justify-content:center;margin-bottom:1rem;">
                             <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 012-2h4a2 2 0 012 2v1m-4 0h4m-9 11V10l3 3m-3-3l3-3"/></svg>
@@ -339,7 +339,7 @@
                         <h3 class="font-semibold text-lg text-slate-500">Badge Preview</h3>
                         <p class="text-sm text-slate-400 mt-1">Your badge will appear here after entering a valid code.</p>
                     </div>
-                    <div id="badge-preview" class="w-full h-full bg-white rounded-2xl flex-col hidden"></div>
+                    <div id="badge-preview" class="hidden" style="position:absolute;inset:0;background:white;border-radius:inherit;overflow:hidden;"></div>
                 </div>
             </div>
         </div>
