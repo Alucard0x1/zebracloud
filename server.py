@@ -90,7 +90,7 @@ if "ALLOW_PRINTER_QUEUE_FALLBACK" in os.environ:
 
 PRINT_API_KEY = os.environ.get("PRINT_API_KEY", "")
 EXTERNAL_API_KEY = os.environ.get("EXTERNAL_API_KEY", "")
-EXTERNAL_API_BASE_URL = os.environ.get("EXTERNAL_API_BASE_URL", "https://tickets.w.media/link")
+EXTERNAL_API_BASE_URL = os.environ.get("EXTERNAL_API_BASE_URL", "https://tickets.w.media/badge")
 ATTENDEE_CACHE_TTL_SECONDS = int(os.environ.get("ATTENDEE_CACHE_TTL_SECONDS", "300"))
 ATTENDEE_CACHE: dict[tuple[str, str], tuple[float, dict]] = {}
 

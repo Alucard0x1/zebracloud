@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Self-Service Badge Printer</title>
-    <link rel="stylesheet" href="assets/tailwind.css?v=20260624f">
+    <link rel="stylesheet" href="assets/tailwind.css?v=20260624e">
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <link rel="stylesheet" href="fonts/poppins/poppins.css?v=20260624b">
@@ -89,6 +89,7 @@
             background: rgba(255,255,255,0.07);
             border: 1px solid rgba(255,255,255,0.1);
             border-radius: 20px; padding: 24px;
+            backdrop-filter: blur(12px);
         }
         @media (min-width: 768px) { .glass-card { padding: 28px; border-radius: 24px; } }
 
@@ -254,10 +255,12 @@
                     <div id="input-area" class="flex flex-col gap-4">
                         <input type="text" id="attendee-code" placeholder="Enter your ID Ticket..." class="input-ticket">
                         <div class="grid grid-cols-2 gap-3">
-                            <button id="preview-btn" class="bg-white text-blue-700 font-semibold px-5 py-4 rounded-xl hover:bg-blue-50 transition shadow-sm text-base md:text-lg">
-                                Preview Badge
+                            <button id="preview-btn" class="btn-touch btn-primary">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                Preview
                             </button>
-                            <button id="print-btn" disabled class="bg-slate-400 text-white font-semibold px-5 py-4 rounded-xl transition cursor-not-allowed shadow-sm text-base md:text-lg">
+                            <button id="print-btn" disabled class="btn-touch btn-disabled">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
                                 Print
                             </button>
                         </div>
@@ -314,7 +317,7 @@
                     <h3 class="text-lg font-bold text-slate-800 mb-1">Badge Printed!</h3>
                     <p class="text-slate-600 mb-3">Attendee: <span id="scanned-attendee-name" class="font-semibold"></span></p>
                     <div class="flex gap-3 justify-center">
-                        <button id="print-now-btn" class="bg-green-600 text-white px-5 py-3 rounded-lg hover:bg-green-700 transition font-semibold">Print Again</button>
+                        <button id="print-now-btn" class="btn-touch btn-success" style="min-height:44px; padding:10px 20px;">Print Again</button>
                     </div>
                 </div>
             </div>
@@ -637,8 +640,8 @@
                     generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120);
                 }, 0);
                 printBtn.disabled = false;
-                printBtn.classList.remove('bg-slate-400', 'cursor-not-allowed');
-                printBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                printBtn.classList.remove('btn-disabled');
+                printBtn.classList.add('btn-success');
             } catch (error) {
                 console.error('Error fetching attendee data:', error);
                 errorMessage.textContent = `Attendee with Ticket Number "${code}" not found. Please check on Front Desk.`;
@@ -647,8 +650,8 @@
                 badgePreviewContainer.classList.remove('flex');
                 previewPanel.classList.remove('has-badge');
                 printBtn.disabled = true;
-                printBtn.classList.add('bg-slate-400', 'cursor-not-allowed');
-                printBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                printBtn.classList.add('btn-disabled');
+                printBtn.classList.remove('btn-success');
             }
         };
 
@@ -676,8 +679,8 @@
             attendeeCodeInput.value = '';
             errorMessage.textContent = '';
             printBtn.disabled = true;
-            printBtn.classList.add('bg-slate-400', 'cursor-not-allowed');
-            printBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+            printBtn.classList.add('btn-disabled');
+            printBtn.classList.remove('btn-success');
         };
 
         const showScanSuccess = (attendee) => {
@@ -702,8 +705,8 @@
                     generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120);
                 }, 0);
                 printBtn.disabled = false;
-                printBtn.classList.remove('bg-slate-400', 'cursor-not-allowed');
-                printBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                printBtn.classList.remove('btn-disabled');
+                printBtn.classList.add('btn-success');
                 return true;
             } catch (error) {
                 console.error('Error fetching attendee data:', error);
@@ -721,8 +724,8 @@
                 if (isProcessing) return;
                 isProcessing = true;
                 try {
-                    const idregPattern = /https:\/\/tickets\.w\.media\/link\?idreg=(\d+)/;
-                    const idmaPattern = /https:\/\/tickets\.w\.media\/link\?idma=(\d+)/;
+                    const idregPattern = /https:\/\/tickets\.w\.media\/(?:link|badge)\?idreg=(\d+)/;
+                    const idmaPattern = /https:\/\/tickets\.w\.media\/(?:link|badge)\?idma=(\d+)/;
                     const idregMatch = decodedText.match(idregPattern);
                     const idmaMatch = decodedText.match(idmaPattern);
 
@@ -743,8 +746,8 @@
                                 generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120);
                             }, 0);
                             printBtn.disabled = false;
-                            printBtn.classList.remove('bg-slate-400', 'cursor-not-allowed');
-                            printBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                            printBtn.classList.remove('btn-disabled');
+                            printBtn.classList.add('btn-success');
                             const result = await sendToPrinter(currentAttendee);
                             if (result.success) { qrStatus.textContent = 'Badge printed! Tap "Reprint" if needed.'; showScanSuccess(currentAttendee); }
                             else { qrStatus.textContent = `Print failed: ${result.error}`; }
@@ -767,8 +770,8 @@
                                 generateQRCode(`qrcode-print-${safeDomId(currentAttendee.code)}`, currentAttendee, 120);
                             }, 0);
                             printBtn.disabled = false;
-                            printBtn.classList.remove('bg-slate-400', 'cursor-not-allowed');
-                            printBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                            printBtn.classList.remove('btn-disabled');
+                            printBtn.classList.add('btn-success');
                             const result = await sendToPrinter(currentAttendee);
                             if (result.success) { qrStatus.textContent = 'Badge printed! Tap "Reprint" if needed.'; showScanSuccess(currentAttendee); }
                             else { qrStatus.textContent = `Print failed: ${result.error}`; }
