@@ -7,10 +7,10 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Self-Service Badge Printer</title>
-    <link rel="stylesheet" href="assets/tailwind.css?v=20260624">
+    <link rel="stylesheet" href="assets/tailwind.css?v=20260624b">
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-    <link rel="stylesheet" href="fonts/poppins/poppins.css?v=20260624">
+    <link rel="stylesheet" href="fonts/poppins/poppins.css?v=20260624b">
     <style>
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
         body { font-family: 'Poppins', sans-serif; overflow: hidden; margin: 0; }
@@ -153,20 +153,22 @@
         @media (min-width: 768px) { .input-ticket { padding: 18px 24px; font-size: 1.15rem; border-radius: 16px; } }
 
         /* QR Scanner */
-        #qr-reader { width: 100%; height: 100%; border: none; overflow: hidden; }
+        #qr-reader { width: 100%; height: 100%; border: none; overflow: hidden; position: relative; z-index: 1; }
         #qr-reader video { width: 100% !important; height: 100% !important; object-fit: cover; }
+        #qr-reader * { z-index: auto !important; }
 
         .scanner-overlay {
             position: absolute; inset: 0; z-index: 50;
             background: #0a0f1e; display: flex; flex-direction: column;
         }
         .scanner-header {
-            position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+            position: absolute; top: 0; left: 0; right: 0; z-index: 60;
             padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;
             background: linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 70%, transparent 100%);
         }
+        .scanner-header button { position: relative; z-index: 61; }
         .scanner-footer {
-            position: absolute; bottom: 0; left: 0; right: 0; z-index: 10;
+            position: absolute; bottom: 0; left: 0; right: 0; z-index: 60;
             padding: 24px; text-align: center;
             background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 70%, transparent 100%);
         }
@@ -180,7 +182,7 @@
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background: rgba(255,255,255,0.97); padding: 2rem; border-radius: 1.5rem;
             box-shadow: 0 25px 60px -12px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,0,0,0.05);
-            z-index: 100; text-align: center; max-width: 380px; width: calc(100% - 3rem);
+            z-index: 200; text-align: center; max-width: 380px; width: calc(100% - 3rem);
             animation: fadeInScale 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
             backdrop-filter: blur(20px);
         }
